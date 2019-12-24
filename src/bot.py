@@ -3,6 +3,13 @@
 import praw
 import json
 
+# A list of the commands accepted by the bot. Every command
+# is essentially a function that maps a message to a help
+# string and a reply.
+COMMANDS = {
+    'help': ('prints this help message.', lambda msg: get_help_message(msg.author.name))
+}
+
 def read_config():
     """Reads the configuration file."""
     with open('bot-config.txt') as f:
@@ -19,7 +26,7 @@ def create_reddit(config):
 
 def list_commands():
     """Creates a list of all commands accepted by this bot."""
-    return ['help -- prints this help message.']
+    return ['%s -- %s' % (cmd, COMMANDS[cmd][0]) for cmd in sorted(COMMANDS)]
 
 def list_commands_as_markdown():
     """Creates a list of all commands accepted by this bot and formats it as Markdown."""
@@ -30,7 +37,7 @@ def get_help_message(username):
     return '''
 Hi %s! Here's a list of the commands I understand:
 
-  %s''' % (username, list_commands_as_markdown())
+%s''' % (username, list_commands_as_markdown())
 
 def reply(message, body):
     """Replies to a private message."""
@@ -42,8 +49,9 @@ def reply(message, body):
 
 def process_message(message):
     """Processes a message sent to the bot."""
-    if message.body == 'help':
-        reply(message, get_help_message(message.author.name))
+    split_msg = message.body.split()
+    if len(split_msg) > 0 and split_msg[0] in COMMANDS:
+        reply(message, COMMANDS[split_msg[0]](message))
     else:
         reply(
             message,
