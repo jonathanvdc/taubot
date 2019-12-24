@@ -4,8 +4,9 @@ import praw
 import json
 
 # A list of the commands accepted by the bot. Every command
-# is essentially a function that maps a message to a help
-# string and a reply.
+# is essentially a function that maps a message to a reply.
+# For convenience, every command is associated with a help
+# string here.
 COMMANDS = {
     'help': ('prints this help message.', lambda msg: get_help_message(msg.author.name))
 }
