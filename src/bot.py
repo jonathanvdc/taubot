@@ -13,7 +13,7 @@ COMMANDS = {
 
 def read_config():
     """Reads the configuration file."""
-    with open('bot-config.txt') as f:
+    with open('bot-config.json') as f:
         return json.load(f)
 
 def create_reddit(config):
