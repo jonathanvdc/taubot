@@ -228,3 +228,88 @@ class LedgerServer(InMemoryServer):
             self.get_account_id(destination),
             amount)
         return account
+
+# TODO: import the backend.
+backend = None
+
+class BackendServer(Server):
+    """A server implementation that calls into Mobil's backend."""
+    def __init__(self, server_id):
+        """Initializes a backend server."""
+        self.server_id = server_id
+
+    def open_account(self, id, account_uuid=None):
+        """Opens an empty account with a particular ID. Raises an exception if the account
+           already exists. Otherwise returns the newly opened account."""
+        return BackendCitizenAccount(self.server_id, backend.add_account(id, id, self.server_id, True))
+
+    def get_account(self, id):
+        """Gets the account that matches an ID. Raises an exception if there is no such account."""
+        return BackendCitizenAccount(self.server_id, id)
+
+    def has_account(self, id):
+        """Tests if an account with a particular ID exists on this server."""
+        return backend.account_exists(id, self.server_id)
+
+    def get_government_account(self):
+        """Gets the main government account for this server."""
+        return BackendGovernmentAccount(self.server_id)
+
+    def authorize(self, author, account, auth_level):
+        """Makes `author` set `account`'s authorization level to `auth_level`."""
+        # FIXME: imperfect match with Mobil's backend API.
+        if auth_level.value > Authorization.CITIZEN:
+            backend.add_local_admin(account.account_id, self.server_id)
+
+    def transfer(self, author, source, destination, amount):
+        """Transfers a particular amount of money from one account on this server to another on
+           the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
+           This action must not complete successfully if the transfer cannot be performed."""
+        if not self.can_transfer(source, destination, amount):
+            raise Exception("Cannot perform transfer.")
+
+        return backend.money_transfer(source.account_id, destination.account_id, amount, self.server_id, False)
+
+class BackendCitizenAccount(Account):
+    """An citizen account implementation that calls into Mobil's backend."""
+    def __init__(self, server_id, account_id):
+        """Creates a backend account."""
+        self.server_id = server_id
+        self.account_id = account_id
+
+    def get_uuid(self):
+        """Gets this account's unique identifier."""
+        return backend.id_to_uuid(self.account_id)
+
+    def get_balance(self):
+        """Gets the balance on this account."""
+        return backend.get_account_balance(self.account_id, self.server_id)
+
+    def is_frozen(self):
+        """Tells if this account is frozen."""
+        return backend.is_locked(self.account_id, self.server_id)
+
+    def get_authorization(self):
+        """Gets this account's level of authorization."""
+        return backend.auth_level(self.account_id, self.server_id)
+
+class BackendGovernmentAccount(Account):
+    """An government account implementation that calls into Mobil's backend."""
+    def __init__(self, server_id):
+        self.server_id = server_id
+
+    def get_uuid(self):
+        """Gets this account's unique identifier."""
+        raise NotImplementedError()
+
+    def get_balance(self):
+        """Gets the balance on this account."""
+        return backend.get_govt_balance(self.server_id)
+
+    def is_frozen(self):
+        """Tells if this account is frozen."""
+        return False
+
+    def get_authorization(self):
+        """Gets this account's level of authorization."""
+        return Authorization.CITIZEN
