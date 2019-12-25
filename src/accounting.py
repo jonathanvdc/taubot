@@ -16,12 +16,20 @@ class Server(object):
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         raise NotImplementedError()
 
+    def get_account_id(self, account):
+        """Gets an account's local ID. Raises an exception if the account is not registered here."""
+        raise NotImplementedError()
+
     def has_account(self, id):
         """Tests if an account with a particular ID exists on this server."""
         raise NotImplementedError()
 
     def get_government_account(self):
         """Gets the main government account for this server."""
+        raise NotImplementedError()
+
+    def list_accounts(self):
+        """Lists all accounts on this server."""
         raise NotImplementedError()
 
     def authorize(self, author, account, auth_level):
@@ -108,6 +116,10 @@ class InMemoryServer(Server):
     def get_government_account(self):
         """Gets the main government account for this server."""
         return self.gov_account
+
+    def list_accounts(self):
+        """Lists all accounts on this server."""
+        return self.accounts.values()
 
     def authorize(self, author, account, auth_level):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
@@ -208,7 +220,7 @@ class LedgerServer(InMemoryServer):
 
     def authorize(self, author, account, auth_level):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
-        result = super().authorize(account, auth_level)
+        result = super().authorize(author, account, auth_level)
         self._ledger_write(
             'authorize',
             self.get_account_id(author),
@@ -247,6 +259,10 @@ class BackendServer(Server):
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         return BackendCitizenAccount(self.server_id, id)
 
+    def get_account_id(self, account):
+        """Gets an account's local ID. Raises an exception if the account is not registered here."""
+        return account.account_id if isinstance(account, BackendCitizenAccount) else "@government"
+
     def has_account(self, id):
         """Tests if an account with a particular ID exists on this server."""
         return backend.account_exists(id, self.server_id)
@@ -254,6 +270,10 @@ class BackendServer(Server):
     def get_government_account(self):
         """Gets the main government account for this server."""
         return BackendGovernmentAccount(self.server_id)
+
+    def list_accounts(self):
+        """Lists all accounts on this server."""
+        return [self.get_government_account()] + [self.get_account(id) for id in backend.list_accounts(self.server_id)]
 
     def authorize(self, author, account, auth_level):
         """Makes `author` set `account`'s authorization level to `auth_level`."""

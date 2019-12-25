@@ -117,10 +117,10 @@ def parse_authorization(message):
 
     _, beneficiary, auth_level = body
     auth_level = auth_level.upper()
-    if auth_level not in Authorization:
+    try:
+        return (beneficiary, Authorization[auth_level])
+    except KeyError:
         return None
-
-    return (beneficiary, Authorization[auth_level])
 
 def process_authorization(author, message, server):
     """Processes a message requesting an authorization change."""
@@ -132,8 +132,14 @@ def process_authorization(author, message, server):
     beneficiary, auth_level = parsed
     beneficiary_account = assert_is_account(beneficiary, server)
     server.authorize(author_account, beneficiary_account, auth_level)
-    return '%s is now authorization with authorization level %s.' % (beneficiary, auth_level.name)
+    return '%s now has authorization level %s.' % (beneficiary, auth_level.name)
 
+def process_list_accounts(author, message, server):
+    """Processes a message requesting a list of all accounts."""
+    return '\n'.join([
+        '  * %s - %s' % (str(server.get_account_id(account)), account.get_balance())
+        for account in server.list_accounts()
+    ])
 
 def list_commands(author, server):
     """Creates a list of all commands accepted by this bot."""
@@ -179,4 +185,9 @@ COMMANDS = {
         'transfers AMOUNT from SENDER to BENEFICIARY.',
         process_admin_transfer,
         Authorization.ADMIN),
+    'list': (
+        'list',
+        'lists all accounts and the balance on the accounts.',
+        process_list_accounts,
+        Authorization.ADMIN)
 }
