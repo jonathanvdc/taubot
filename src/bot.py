@@ -54,8 +54,11 @@ def process_message(message, server):
 
 def process_all_messages(reddit, server):
     """Processes all unread messages received by the bot."""
+    # Process private messages.
     for message in reddit.inbox.unread(limit=None):
         process_message(message, server)
+
+    # TODO: process comments where the bot is mentioned.
 
 if __name__ == '__main__':
     reddit = create_reddit(read_config())
