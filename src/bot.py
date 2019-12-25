@@ -40,7 +40,7 @@ def process_message(message, server):
     elif split_msg[0] in COMMANDS:
         try:
             cmd = COMMANDS[split_msg[0]]
-            if len(cmd) >= 4 and cmd[3] > Authorization.CITIZEN:
+            if len(cmd) >= 4 and cmd[3].value > Authorization.CITIZEN.value:
                 assert_authorized(author, server, cmd[3])
 
             reply(message, cmd[2](author, message.body, server))

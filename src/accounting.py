@@ -197,7 +197,7 @@ class LedgerServer(InMemoryServer):
 
     def _ledger_write(self, *args):
         self.ledger_file.writelines(
-            ' '.join([str(time.time())] + list(map(str, args))))
+            ' '.join([str(time.time())] + list(map(str, args))) + '\n')
 
     def open_account(self, id, account_uuid=None):
         """Opens an empty account with a particular ID. Raises an exception if the account

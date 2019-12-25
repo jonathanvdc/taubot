@@ -37,7 +37,7 @@ def parse_admin_transfer_command(message):
     if len(body) != 4:
         return None
 
-    _, sender, amount_text, destination = body
+    _, amount_text, sender, destination = body
     try:
         amount = int(amount_text)
     except ValueError:
@@ -88,8 +88,9 @@ def process_balance(author, message, server):
         return 'Hi there %s. I can\'t tell you what the balance on your account is because you don\'t have an account yet. ' \
             'You can open one with the `open` command.' % author
 
-    main_response = 'The balance on your account is %s.' % server.get_account(author).get_balance()
-    return 'Hi there %s. %s Have a great day.' % (author, main_response)
+    account = server.get_account(author)
+    main_response = 'The balance on your account is %s.' % account.get_balance()
+    return 'Hi there %s %s. %s Have a great day.' % (account.get_authorization().name.lower(), author, main_response)
 
 def assert_is_account(account_name, server):
     """Asserts that a particular account exists. Returns the account."""
@@ -103,7 +104,7 @@ def assert_authorized(account_name, server, auth_level):
        Returns the account."""
     account = assert_is_account(account_name, server)
 
-    if account.get_authorization() < auth_level:
+    if account.get_authorization().value < auth_level.value:
         raise CommandException('Sorry, I can\'t process your request because `%s` does not have the required authorization.' % account_name)
 
     return account
@@ -126,7 +127,7 @@ def process_authorization(author, message, server):
     author_account = assert_authorized(author, server, Authorization.ADMIN)
     parsed = parse_authorization(message)
     if parsed is None:
-        raise CommandException('Authorization formatted incorrectly. The right format is `authorize BENEFICIARY [citizen|admin|developer]`.')
+        raise CommandException('Authorization formatted incorrectly. The right format is `authorize BENEFICIARY citizen|admin|developer`.')
 
     beneficiary, auth_level = parsed
     beneficiary_account = assert_is_account(beneficiary, server)
@@ -137,15 +138,15 @@ def process_authorization(author, message, server):
 def list_commands(author, server):
     """Creates a list of all commands accepted by this bot."""
     return [
-        '`%s` &ndash; %s' % (COMMANDS[cmd][0], COMMANDS[cmd][1])
-        for cmd in sorted(COMMANDS)
-        if len(cmd) < 4 or get_authorization_or_citizen(author, server) >= cmd[3]
+        '`%s` &ndash; %s' % (COMMANDS[key][0], COMMANDS[key][1])
+        for key in sorted(COMMANDS)
+        if len(COMMANDS[key]) < 4 or get_authorization_or_citizen(author, server).value >= COMMANDS[key][3].value
     ]
 
 def get_authorization_or_citizen(author, server):
     """Gets an account's authorization if it exists and the default citizen authorization otherwise."""
     return server.get_account(author).get_authorization() \
-        if author.has_account(author) \
+        if server.has_account(author) \
         else Authorization.CITIZEN
 
 def list_commands_as_markdown(author, server):
@@ -169,7 +170,7 @@ COMMANDS = {
     'open': ('open', 'opens a new account.', process_open_account),
     'balance': ('balance', 'prints the balance on your account.', process_balance),
     'authorize': (
-        'authorize ACCOUNT [citizen|admin|developer]',
+        'authorize ACCOUNT citizen|admin|developer',
         'sets an account\'s authorization.',
         process_authorization,
         Authorization.ADMIN),
