@@ -36,6 +36,25 @@ class Server(object):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
         raise NotImplementedError()
 
+    def get_recurring_transfer(self, id):
+        """Gets a recurring transfer based on its ID."""
+        raise NotImplementedError()
+
+    def list_recurring_transfers(self):
+        """Produces a list of all recurring transfers."""
+        raise NotImplementedError()
+
+    def create_recurring_transfer(self, author, source, destination, total_amount, tick_count):
+        """Creates and registers a new recurring transfer, i.e., a transfer that is spread out over
+           many ticks. The transfer is authorized by `author` and consists of `total_amount` being
+           transferred from `source` to `destination` over the course of `tick_count` ticks. A tick
+           is a server-defined timespan."""
+        raise NotImplementedError()
+
+    def notify_tick_elapsed(self):
+        """Notifies the server that a tick has elapsed."""
+        raise NotImplementedError()
+
     def transfer(self, author, source, destination, amount):
         """Transfers a particular amount of money from one account on this server to another on
            the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
@@ -72,6 +91,42 @@ class Account(object):
         raise NotImplementedError()
 
 
+class RecurringTransfer(object):
+    """A recurring transfer."""
+
+    def get_id(self):
+        """Gets the ID for the transfer."""
+        raise NotImplementedError()
+
+    def get_author(self):
+        """Gets the account that authorized the transfer."""
+        raise NotImplementedError()
+
+    def get_source(self):
+        """Gets the account from which the money originates."""
+        raise NotImplementedError()
+
+    def get_destination(self):
+        """Gets the account to which the money must go."""
+        raise NotImplementedError()
+
+    def get_tick_count(self):
+        """Gets the number of ticks over the course of which the transfer must complete."""
+        raise NotImplementedError()
+
+    def get_total_amount(self):
+        """Gets the total amount to transfer."""
+        raise NotImplementedError()
+
+    def get_remaining_amount(self):
+        """Gets the remaining amount to transfer."""
+        raise NotImplementedError()
+
+    def get_transferred_amount(self):
+        """Gets the amount of money that has already been transferred."""
+        return self.get_total_amount() - self.get_remaining_amount()
+
+
 class Authorization(Enum):
     """Defines various levels of authorization for account."""
     CITIZEN = 0
@@ -89,6 +144,7 @@ class InMemoryServer(Server):
         self.inv_accounts = {}
         self.gov_account = InMemoryServer.open_account(self, "@government")
         self.gov_account.auth = Authorization.DEVELOPER
+        self.recurring_transfers = {}
 
     def open_account(self, id, account_uuid=None):
         """Opens an empty account with a particular ID. Raises an exception if the account
@@ -135,6 +191,50 @@ class InMemoryServer(Server):
         source.balance -= amount
         destination.balance += amount
 
+    def get_recurring_transfer(self, id):
+        """Gets a recurring transfer based on its ID."""
+        return self.recurring_transfers[id]
+
+    def list_recurring_transfers(self):
+        """Produces a list of all recurring transfers."""
+        return self.recurring_transfers.values()
+
+    def create_recurring_transfer(self, author, source, destination, total_amount, tick_count):
+        """Creates and registers a new recurring transfer, i.e., a transfer that is spread out over
+           many ticks. The transfer is authorized by `author` and consists of `total_amount` being
+           transferred from `source` to `destination` over the course of `tick_count` ticks. A tick
+           is a server-defined timespan."""
+        rec_transfer = InMemoryRecurringTransfer(author, source, destination, total_amount, tick_count, total_amount)
+        self.recurring_transfers[rec_transfer.get_id()] = rec_transfer
+        return rec_transfer
+
+    def notify_tick_elapsed(self):
+        """Notifies the server that a tick has elapsed."""
+        finished_transfers = set()
+        for id in self.recurring_transfers:
+            transfer = self.recurring_transfers[id]
+            per_tick = transfer.get_total_amount() // transfer.get_tick_count()
+            if transfer.get_remaining_amount() <= 0:
+                finished_transfers.add(id)
+            elif transfer.get_remaining_amount() >= per_tick:
+                if self.can_transfer(transfer.get_source(), transfer.get_destination(), per_tick):
+                    self.perform_recurring_transfer(transfer, per_tick)
+            else:
+                remaining = transfer.get_total_amount() % per_tick
+                if self.can_transfer(transfer.get_source(), transfer.get_destination(), remaining):
+                    self.perform_recurring_transfer(transfer, remaining)
+
+        # Delete finished transfers.
+        for id in finished_transfers:
+            del self.recurring_transfers[id]
+
+    def perform_recurring_transfer(self, transfer, amount):
+        self.transfer(
+            transfer.get_author(),
+            transfer.get_source(),
+            transfer.get_destination(), amount)
+        transfer.remaining_amount -= amount
+
 
 class InMemoryAccount(Account):
     """An in-memory account data structure."""
@@ -162,6 +262,49 @@ class InMemoryAccount(Account):
     def get_authorization(self):
         """Gets this account's level of authorization."""
         return self.auth
+
+
+class InMemoryRecurringTransfer(RecurringTransfer):
+    """An in-memory description of a recurring transfer."""
+
+    def __init__(self, author, source, destination, total_amount, tick_count, remaining_amount, transfer_id=None):
+        """Initializes an in-memory recurring transfer."""
+        self.uuid = transfer_id if transfer_id is not None else str(
+            uuid.uuid4())
+        self.author = author
+        self.source = source
+        self.destination = destination
+        self.total_amount = total_amount
+        self.tick_count = tick_count
+        self.remaining_amount = remaining_amount
+
+    def get_id(self):
+        """Gets this transfer's ID."""
+        return self.uuid
+
+    def get_author(self):
+        """Gets the account that authorized the transfer."""
+        return self.author
+
+    def get_source(self):
+        """Gets the account from which the money originates."""
+        return self.source
+
+    def get_destination(self):
+        """Gets the account to which the money must go."""
+        return self.destination
+
+    def get_tick_count(self):
+        """Gets the number of ticks over the course of which the transfer must complete."""
+        return self.tick_count
+
+    def get_total_amount(self):
+        """Gets the total amount to transfer."""
+        return self.total_amount
+
+    def get_remaining_amount(self):
+        """Gets the remaining amount to transfer."""
+        return self.remaining_amount
 
 
 class LedgerServer(InMemoryServer):
@@ -241,11 +384,14 @@ class LedgerServer(InMemoryServer):
             amount)
         return account
 
+
 # TODO: import the backend.
 backend = None
 
+
 class BackendServer(Server):
     """A server implementation that calls into Mobil's backend."""
+
     def __init__(self, server_id):
         """Initializes a backend server."""
         self.server_id = server_id
@@ -290,8 +436,10 @@ class BackendServer(Server):
 
         return backend.money_transfer(source.account_id, destination.account_id, amount, self.server_id, False)
 
+
 class BackendCitizenAccount(Account):
     """An citizen account implementation that calls into Mobil's backend."""
+
     def __init__(self, server_id, account_id):
         """Creates a backend account."""
         self.server_id = server_id
@@ -313,8 +461,10 @@ class BackendCitizenAccount(Account):
         """Gets this account's level of authorization."""
         return backend.auth_level(self.account_id, self.server_id)
 
+
 class BackendGovernmentAccount(Account):
     """An government account implementation that calls into Mobil's backend."""
+
     def __init__(self, server_id):
         self.server_id = server_id
 
