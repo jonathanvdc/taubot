@@ -19,8 +19,8 @@ def read_config():
 def create_reddit(config):
     """Creates a Reddit handle."""
     return praw.Reddit(
-        client_id='ppe35WDZIGxLDQ',
-        client_secret='Rh5Ka0ZU119q3CdKDPz9r_YL1vU',
+        client_id=config['reddit_client_id'],
+        client_secret=config['reddit_client_secret'],
         user_agent='PyEng Bot 0.1',
         username=config['reddit_username'],
         password=config['reddit_password'])
