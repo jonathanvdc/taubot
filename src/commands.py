@@ -1,4 +1,9 @@
 # This module defines logic for processing bot commands.
+from accounting import Authorization
+
+class CommandException(Exception):
+    """The type of exception that is thrown when a command fails."""
+    pass
 
 def parse_transfer_command(message):
     """Parses a transfer command message."""
@@ -54,35 +59,94 @@ def process_open_account(author, message, server):
     return 'Hi there %s. Your account has been opened successfully. Thank you for your business.' % author
 
 def process_balance(author, message, server):
-    """Process a message requesting the balance on an account."""
+    """Processes a message requesting the balance on an account."""
     if not server.has_account(author):
         return 'Hi there %s. I can\'t tell you what the balance on your account is because you don\'t have an account yet. ' \
             'You can open one with the `open` command.' % author
 
-    return 'Hi there %s. The balance on your account is %s. Have a great day.' % (author, server.get_account(author).get_balance())
+    main_response = 'The balance on your account is %s.' % server.get_account(author).get_balance()
+    return 'Hi there %s. %s Have a great day.' % (author, main_response)
 
-def list_commands():
+def assert_is_account(account_name, server):
+    """Asserts that a particular account exists. Returns the account."""
+    if not server.has_account(account_name):
+        raise CommandException('Sorry, I can\'t process your request because `%s` does not have an account yet.' % account_name)
+
+    return server.get_account(account_name)
+
+def assert_authorized(account_name, server, auth_level):
+    """Asserts that a particular account exists and has an authorization level that is at least `auth_level`.
+       Returns the account."""
+    account = assert_is_account(account_name, server)
+
+    if account.get_authorization() < auth_level:
+        raise CommandException('Sorry, I can\'t process your request because `%s` does not have the required authorization.' % account_name)
+
+    return account
+
+def parse_authorization(message):
+    """Parses an authorization message."""
+    body = message.split()
+    if len(body) != 3:
+        return None
+
+    _, beneficiary, auth_level = body
+    auth_level = auth_level.upper()
+    if auth_level not in Authorization:
+        return None
+
+    return (beneficiary, Authorization[auth_level])
+
+def process_authorization(author, message, server):
+    """Processes a message requesting an authorization change."""
+    assert_authorized(author, server, Authorization.ADMIN)
+    parsed = parse_authorization(message)
+    if parsed is None:
+        raise CommandException('Authorization formatted incorrectly. The right format is `authorize BENEFICIARY [citizen|admin|developer]`.')
+
+    beneficiary, auth_level = parsed
+    beneficiary_account = assert_is_account(beneficiary, server)
+    server.authorize(beneficiary_account, auth_level)
+    return '%s is now authorization with authorization level %s.' % (beneficiary, auth_level.name)
+
+
+def list_commands(author, server):
     """Creates a list of all commands accepted by this bot."""
-    return ['`%s` &ndash; %s' % (COMMANDS[cmd][0], COMMANDS[cmd][1]) for cmd in sorted(COMMANDS)]
+    return [
+        '`%s` &ndash; %s' % (COMMANDS[cmd][0], COMMANDS[cmd][1])
+        for cmd in sorted(COMMANDS)
+        if len(cmd) < 4 or get_authorization_or_citizen(author, server) >= cmd[3]
+    ]
 
-def list_commands_as_markdown():
+def get_authorization_or_citizen(author, server):
+    """Gets an account's authorization if it exists and the default citizen authorization otherwise."""
+    return server.get_account(author).get_authorization() \
+        if author.has_account(author) \
+        else Authorization.CITIZEN
+
+def list_commands_as_markdown(author, server):
     """Creates a list of all commands accepted by this bot and formats it as Markdown."""
-    return '\n'.join('  * %s' % item for item in list_commands())
+    return '\n'.join('  * %s' % item for item in list_commands(author, server))
 
-def get_help_message(username):
+def process_help(author, message, server):
     """Gets the help message for the economy bot."""
     return '''
 Hi %s! Here's a list of the commands I understand:
 
-%s''' % (username, list_commands_as_markdown())
+%s''' % (author, list_commands_as_markdown(author, server))
 
 # A list of the commands accepted by the bot. Every command
 # is essentially a function that maps a message to a reply.
 # For convenience, every command is associated with a help
 # string here.
 COMMANDS = {
-    'help': ('help', 'prints a help message.', lambda author, msg, server: get_help_message(author)),
+    'help': ('help', 'prints a help message.', process_help),
     'transfer': ('transfer AMOUNT BENEFICIARY', 'transfers AMOUNT to user BENEFICIARY\'s account', process_transfer),
     'open': ('open', 'opens a new account.', process_open_account),
-    'balance': ('balance', 'prints the balance on your account.', process_balance)
+    'balance': ('balance', 'prints the balance on your account.', process_balance),
+    'authorize': (
+        'authorize ACCOUNT [citizen|admin|developer]',
+        'sets an account\'s authorization.',
+        process_authorization,
+        Authorization.ADMIN)
 }

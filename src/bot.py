@@ -3,8 +3,8 @@
 import praw
 import json
 import time
-from accounting import LedgerServer
-from commands import COMMANDS, list_commands_as_markdown
+from accounting import LedgerServer, Authorization
+from commands import COMMANDS, list_commands_as_markdown, CommandException, assert_authorized
 
 def read_config():
     """Reads the configuration file."""
@@ -36,14 +36,21 @@ def process_message(message, server):
         reply(
             message,
             'Hi %s! You sent me an empty message. Here\'s a list of commands I do understand:\n\n%s' %
-            (author, list_commands_as_markdown()))
+            (author, list_commands_as_markdown(author, server)))
     elif split_msg[0] in COMMANDS:
-        reply(message, COMMANDS[split_msg[0]][2](author, message.body, server))
+        try:
+            cmd = COMMANDS[split_msg[0]]
+            if len(cmd) >= 4 and cmd[3] > Authorization.CITIZEN:
+                assert_authorized(author, server, cmd[3])
+
+            reply(message, cmd[2](author, message.body, server))
+        except CommandException as e:
+            reply(message, str(e))
     else:
         reply(
             message,
             'Hi %s! I didn\'t quite understand command your command `%s`. Here\'s a list of commands I do understand:\n\n%s' %
-            (author, split_msg[0], list_commands_as_markdown()))
+            (author, split_msg[0], list_commands_as_markdown(author, server)))
 
 def process_all_messages(reddit, server):
     """Processes all unread messages received by the bot."""

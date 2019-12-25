@@ -1,6 +1,7 @@
 import uuid
 import time
 import os.path
+from enum import Enum
 
 
 class Server(object):
@@ -19,14 +20,18 @@ class Server(object):
         """Tests if an account with a particular ID exists on this server."""
         raise NotImplementedError()
 
+    def get_government_account(self):
+        """Gets the main government account for this server."""
+        raise NotImplementedError()
+
+    def authorize(self, account, auth_level):
+        """Sets an account's authorization level."""
+        raise NotImplementedError()
+
     def transfer(self, source, destination, amount):
         """Transfers a particular amount of money from one account on this server to another.
            `destination` and `amount` are both `Account` objects. This action must not complete
            successfully if the transfer cannot be performed."""
-        raise NotImplementedError()
-
-    def get_government_account(self):
-        """Gets the main government account for this server."""
         raise NotImplementedError()
 
     def can_transfer(self, source, destination, amount):
@@ -53,6 +58,17 @@ class Account(object):
     def is_frozen(self):
         """Tells if this account is frozen."""
         raise NotImplementedError()
+
+    def get_authorization(self):
+        """Gets this account's level of authorization."""
+        raise NotImplementedError()
+
+
+class Authorization(Enum):
+    """Defines various levels of authorization for account."""
+    CITIZEN = 0
+    ADMIN = 1
+    DEVELOPER = 2
 
 
 class InMemoryServer(Server):
@@ -92,6 +108,10 @@ class InMemoryServer(Server):
         """Gets the main government account for this server."""
         return self.gov_account
 
+    def authorize(self, account, auth_level):
+        """Sets an account's authorization level."""
+        account.auth = auth_level
+
     def transfer(self, source, destination, amount):
         """Transfers a particular amount of money from one account on this server to another.
            `destination` and `amount` are both `Account` objects. This action must not complete
@@ -112,6 +132,7 @@ class InMemoryAccount(Account):
             uuid.uuid4())
         self.balance = 0
         self.frozen = False
+        self.auth = Authorization.CITIZEN
 
     def get_uuid(self):
         """Gets this account's unique identifier."""
@@ -124,6 +145,10 @@ class InMemoryAccount(Account):
     def is_frozen(self):
         """Tells if this account is frozen."""
         return self.frozen
+
+    def get_authorization(self):
+        """Gets this account's level of authorization."""
+        return self.auth
 
 
 class LedgerServer(InMemoryServer):
@@ -158,13 +183,16 @@ class LedgerServer(InMemoryServer):
                     self.get_account(elems[1]),
                     self.get_account(elems[2]),
                     int(elems[3]))
+            elif cmd == 'authorize':
+                super().authorize(self.get_account(elems[1]), Authorization[elems[2]])
             elif cmd == 'add-balance':
                 self.get_account(elems[1]).balance += int(elems[2])
             else:
                 raise Exception("Unknown ledger command '%s'." % cmd)
 
     def _ledger_write(self, *args):
-        self.ledger_file.writelines(' '.join([str(time.time())] + list(map(str, args))))
+        self.ledger_file.writelines(
+            ' '.join([str(time.time())] + list(map(str, args))))
 
     def open_account(self, id, account_uuid=None):
         """Opens an empty account with a particular ID. Raises an exception if the account
@@ -172,6 +200,12 @@ class LedgerServer(InMemoryServer):
         account = super().open_account(id, account_uuid)
         self._ledger_write('open', id, account.get_uuid())
         return account
+
+    def authorize(self, account, auth_level):
+        """Sets an account's authorization level."""
+        result = super().authorize(account, auth_level)
+        self._ledger_write('authorize', self.get_account_id(account), auth_level.name)
+        return result
 
     def transfer(self, source, destination, amount):
         """Transfers a particular amount of money from one account on this server to another.
