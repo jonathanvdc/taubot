@@ -8,6 +8,8 @@ The bot will need credentials to log into Reddit. Summarize them in a JSON file 
 
 ```json
 {
+  "reddit_client_id": "CLIENT_ID",
+  "reddit_client_secret": "CLIENT_SECRET",
   "reddit_username": "USERNAME",
   "reddit_password": "PASSWORD"
 }
