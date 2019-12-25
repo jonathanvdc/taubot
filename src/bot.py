@@ -4,14 +4,7 @@ import praw
 import json
 import time
 from accounting import InMemoryServer
-
-# A list of the commands accepted by the bot. Every command
-# is essentially a function that maps a message to a reply.
-# For convenience, every command is associated with a help
-# string here.
-COMMANDS = {
-    'help': ('prints a help message.', lambda msg, server: get_help_message(msg.author.name))
-}
+from commands import COMMANDS, list_commands_as_markdown
 
 def read_config():
     """Reads the configuration file."""
@@ -26,21 +19,6 @@ def create_reddit(config):
         user_agent='PyEng Bot 0.1',
         username=config['reddit_username'],
         password=config['reddit_password'])
-
-def list_commands():
-    """Creates a list of all commands accepted by this bot."""
-    return ['`%s` &ndash; %s' % (cmd, COMMANDS[cmd][0]) for cmd in sorted(COMMANDS)]
-
-def list_commands_as_markdown():
-    """Creates a list of all commands accepted by this bot and formats it as Markdown."""
-    return '\n'.join('  * %s' % item for item in list_commands())
-
-def get_help_message(username):
-    """Gets the help message for the economy bot."""
-    return '''
-Hi %s! Here's a list of the commands I understand:
-
-%s''' % (username, list_commands_as_markdown())
 
 def reply(message, body):
     """Replies to a private message."""
@@ -59,7 +37,7 @@ def process_message(message, server):
             'Hi %s! You sent me an empty message. Here\'s a list of commands I do understand:\n\n%s' %
             (message.author.name, list_commands_as_markdown()))
     elif split_msg[0] in COMMANDS:
-        reply(message, COMMANDS[split_msg[0]](message, server))
+        reply(message, COMMANDS[split_msg[0]][2](message, server))
     else:
         reply(
             message,

@@ -4,6 +4,11 @@ import uuid
 class Server(object):
     """A server manages a number of accounts that all have the same currency."""
 
+    def open_account(self, id):
+        """Opens an empty account with a particular ID. Raises an exception if the account
+           already exists. Otherwise returns the newly opened account."""
+        raise NotImplementedError()
+
     def get_account(self, id):
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         raise NotImplementedError()
@@ -51,7 +56,16 @@ class InMemoryServer(Server):
 
     def __init__(self):
         self.accounts = {}
-        self.account_set = set()
+
+    def open_account(self, id):
+        """Opens an empty account with a particular ID. Raises an exception if the account
+           already exists. Otherwise returns the newly opened account."""
+        if self.has_account(id):
+            raise Exception("Account already exists.")
+
+        account = InMemoryAccount()
+        self.accounts[id] = account
+        return account
 
     def get_account(self, id):
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
