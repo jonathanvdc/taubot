@@ -25,6 +25,10 @@ class Server(object):
            successfully if the transfer cannot be performed."""
         raise NotImplementedError()
 
+    def get_government_account(self):
+        """Gets the main government account for this server."""
+        raise NotImplementedError()
+
     def can_transfer(self, source, destination, amount):
         """Tells if a particular amount of money can be transferred from one account on this
            server to another. `destination` and `amount` are both `Account` objects."""
@@ -59,6 +63,7 @@ class InMemoryServer(Server):
     def __init__(self):
         self.accounts = {}
         self.inv_accounts = {}
+        self.gov_account = self.open_account("@government")
 
     def open_account(self, id, account_uuid=None):
         """Opens an empty account with a particular ID. Raises an exception if the account
@@ -82,6 +87,10 @@ class InMemoryServer(Server):
     def has_account(self, id):
         """Tests if an account with a particular ID exists on this server."""
         return id in self.accounts
+
+    def get_government_account(self):
+        """Gets the main government account for this server."""
+        return self.gov_account
 
     def transfer(self, source, destination, amount):
         """Transfers a particular amount of money from one account on this server to another.
