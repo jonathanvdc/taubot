@@ -8,7 +8,7 @@ import json
 # For convenience, every command is associated with a help
 # string here.
 COMMANDS = {
-    'help': ('prints this help message.', lambda msg: get_help_message(msg.author.name))
+    'help': ('prints a help message.', lambda msg: get_help_message(msg.author.name))
 }
 
 def read_config():
@@ -27,7 +27,7 @@ def create_reddit(config):
 
 def list_commands():
     """Creates a list of all commands accepted by this bot."""
-    return ['%s -- %s' % (cmd, COMMANDS[cmd][0]) for cmd in sorted(COMMANDS)]
+    return ['`%s` -- %s' % (cmd, COMMANDS[cmd][0]) for cmd in sorted(COMMANDS)]
 
 def list_commands_as_markdown():
     """Creates a list of all commands accepted by this bot and formats it as Markdown."""
@@ -51,13 +51,18 @@ def reply(message, body):
 def process_message(message):
     """Processes a message sent to the bot."""
     split_msg = message.body.split()
-    if len(split_msg) > 0 and split_msg[0] in COMMANDS:
+    if len(split_msg) == 0:
+        reply(
+            message,
+            'Hi %s! You sent me an empty message. Here\'s a list of the commands I do understand:\n\n%s' %
+            (message.author.name, list_commands_as_markdown()))
+    elif split_msg[0] in COMMANDS:
         reply(message, COMMANDS[split_msg[0]](message))
     else:
         reply(
             message,
-            'Hi %s! I didn\'t quite understand that command (i.e., the first word in your message). Here\'s a list of the commands I do understand:\n\n%s' %
-            (message.author.name, list_commands_as_markdown()))
+            'Hi %s! I didn\'t quite understand command your command \'%s\'. Here\'s a list of the commands I do understand:\n\n%s' %
+            (message.author.name, split_msg[0], list_commands_as_markdown()))
 
 def process_all_messages(reddit):
     """Processes all unread messages received by the bot."""
