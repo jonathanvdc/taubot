@@ -26,12 +26,12 @@ def process_transfer(author, message, server):
 
     if not server.has_account(author):
         return 'Sorry, but I can\'t perform that transfer: you do not have an account yet. ' \
-            'You can open one with the `open account` command.'
+            'You can open one with the `open` command.'
 
     sender = server.get_account(author)
 
     if not server.has_account(destination_name):
-        return 'Sorry, but I can\'t perform that transfer: your beneficiary does not have an account yet.'
+        return 'Sorry, but I can\'t perform that transfer: your beneficiary %s does not have an account yet.' % destination_name
 
     dest = server.get_account(destination_name)
 
