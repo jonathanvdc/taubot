@@ -53,6 +53,14 @@ def process_open_account(author, message, server):
     server.open_account(author)
     return 'Hi there %s. Your account has been opened successfully. Thank you for your business.' % author
 
+def process_balance(author, message, server):
+    """Process a message requesting the balance on an account."""
+    if not server.has_account(author):
+        return 'Hi there %s. I can\'t tell you what the balance on your account is because you don\'t have an account yet. ' \
+            'You can open one with the `open` command.' % author
+
+    return 'Hi there %s. The balance on your account is %s. Have a great day.' % (author, server.get_account(author).get_balance())
+
 def list_commands():
     """Creates a list of all commands accepted by this bot."""
     return ['`%s` &ndash; %s' % (COMMANDS[cmd][0], COMMANDS[cmd][1]) for cmd in sorted(COMMANDS)]
@@ -73,7 +81,8 @@ Hi %s! Here's a list of the commands I understand:
 # For convenience, every command is associated with a help
 # string here.
 COMMANDS = {
-    'help': ('help', 'prints a help message.', lambda author, msg, server: get_help_message(msg.author.name)),
+    'help': ('help', 'prints a help message.', lambda author, msg, server: get_help_message(author)),
     'transfer': ('transfer AMOUNT BENEFICIARY', 'transfers AMOUNT to user BENEFICIARY\'s account', process_transfer),
-    'open': ('open', 'opens a new account.', process_open_account)
+    'open': ('open', 'opens a new account.', process_open_account),
+    'balance': ('balance', 'prints the balance on your account.', process_balance)
 }
