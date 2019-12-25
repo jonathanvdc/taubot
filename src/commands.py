@@ -2,7 +2,7 @@
 
 def parse_transfer_command(message):
     """Parses a transfer command message."""
-    body = message.body.split()
+    body = message.split()
     if len(body) != 3:
         return None
 
@@ -12,9 +12,9 @@ def parse_transfer_command(message):
     except ValueError:
         return None
 
-    return (message.author.name, amount, destination)
+    return (amount, destination)
 
-def process_transfer(message, server):
+def process_transfer(author, message, server):
     """Processes a transfer command."""
     parse_result = parse_transfer_command(message)
 
@@ -22,13 +22,13 @@ def process_transfer(message, server):
         return 'Transfer formatted incorrectly. Expected `transfer AMOUNT BENEFICIARY`, ' \
             'where AMOUNT is a positive integer and BENEFICIARY is a username.'
 
-    sender_name, amount, destination_name = parse_result
+    amount, destination_name = parse_result
 
-    if not server.has_account(sender_name):
+    if not server.has_account(author):
         return 'Sorry, but I can\'t perform that transfer: you do not have an account yet. ' \
             'You can open one with the `open account` command.'
 
-    sender = server.get_account(message.author.name)
+    sender = server.get_account(author)
 
     if not server.has_account(destination_name):
         return 'Sorry, but I can\'t perform that transfer: your beneficiary does not have an account yet.'
@@ -45,14 +45,13 @@ def process_transfer(message, server):
     proof_string = ' Proof: %s.' % proof if proof is not None else ''
     return 'Transfer performed successfully.%s' % proof_string
 
-def process_open_account(message, server):
+def process_open_account(author, message, server):
     """Processes a message that tries to open a new account."""
-    sender_name = message.author.name
-    if server.has_account(sender_name):
-        return 'Hi there %s. Looks like you already have an account. No need to open another one.' % sender_name
+    if server.has_account(author):
+        return 'Hi there %s. Looks like you already have an account. No need to open another one.' % author
 
-    server.open_account(sender_name)
-    return 'Hi there %s. Your account has been opened successfully. Thank you for your business.' % sender_name
+    server.open_account(author)
+    return 'Hi there %s. Your account has been opened successfully. Thank you for your business.' % author
 
 def list_commands():
     """Creates a list of all commands accepted by this bot."""
@@ -74,7 +73,7 @@ Hi %s! Here's a list of the commands I understand:
 # For convenience, every command is associated with a help
 # string here.
 COMMANDS = {
-    'help': ('help', 'prints a help message.', lambda msg, server: get_help_message(msg.author.name)),
+    'help': ('help', 'prints a help message.', lambda author, msg, server: get_help_message(msg.author.name)),
     'transfer': ('transfer AMOUNT BENEFICIARY', 'transfers AMOUNT to user BENEFICIARY\'s account', process_transfer),
     'open': ('open', 'opens a new account.', process_open_account)
 }

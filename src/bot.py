@@ -26,23 +26,24 @@ def reply(message, body):
     if not title.lower().startswith('re:'):
         title = 're: %s' % message.subject
     message.mark_read()
-    return message.author.message(title, body)
+    return message.author.message(title, '%s\n\n%s' % ('\n'.join('> %s' % line for line in message.body.split('\n')), body))
 
 def process_message(message, server):
     """Processes a message sent to the bot."""
     split_msg = message.body.split()
+    author = message.author.name
     if len(split_msg) == 0:
         reply(
             message,
             'Hi %s! You sent me an empty message. Here\'s a list of commands I do understand:\n\n%s' %
-            (message.author.name, list_commands_as_markdown()))
+            (author, list_commands_as_markdown()))
     elif split_msg[0] in COMMANDS:
-        reply(message, COMMANDS[split_msg[0]][2](message, server))
+        reply(message, COMMANDS[split_msg[0]][2](author, message.body, server))
     else:
         reply(
             message,
             'Hi %s! I didn\'t quite understand command your command `%s`. Here\'s a list of commands I do understand:\n\n%s' %
-            (message.author.name, split_msg[0], list_commands_as_markdown()))
+            (author, split_msg[0], list_commands_as_markdown()))
 
 def process_all_messages(reddit, server):
     """Processes all unread messages received by the bot."""
