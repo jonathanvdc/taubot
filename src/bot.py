@@ -3,7 +3,7 @@
 import praw
 import json
 import time
-from accounting import InMemoryServer
+from accounting import LedgerServer
 from commands import COMMANDS, list_commands_as_markdown
 
 def read_config():
@@ -52,9 +52,9 @@ def process_all_messages(reddit, server):
 
 if __name__ == '__main__':
     reddit = create_reddit(read_config())
-    server = InMemoryServer()
-    while True:
-        # Process messages.
-        process_all_messages(reddit, server)
-        # Sleep for five seconds.
-        time.sleep(5)
+    with LedgerServer('ledger.txt') as server:
+        while True:
+            # Process messages.
+            process_all_messages(reddit, server)
+            # Sleep for five seconds.
+            time.sleep(5)
