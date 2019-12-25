@@ -149,6 +149,8 @@ class LedgerServer(InMemoryServer):
                     self.get_account(elems[1]),
                     self.get_account(elems[2]),
                     int(elems[3]))
+            elif cmd == 'add-balance':
+                self.get_account(elems[1]).balance += int(elems[2])
             else:
                 raise Exception("Unknown ledger command '%s'." % cmd)
 
@@ -170,6 +172,6 @@ class LedgerServer(InMemoryServer):
         self._ledger_write(
             'transfer',
             self.get_account_id(source),
-            destination,
-            self.get_account_id(amount))
+            self.get_account_id(destination),
+            amount)
         return account
