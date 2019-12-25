@@ -24,14 +24,14 @@ class Server(object):
         """Gets the main government account for this server."""
         raise NotImplementedError()
 
-    def authorize(self, account, auth_level):
-        """Sets an account's authorization level."""
+    def authorize(self, author, account, auth_level):
+        """Makes `author` set `account`'s authorization level to `auth_level`."""
         raise NotImplementedError()
 
-    def transfer(self, source, destination, amount):
-        """Transfers a particular amount of money from one account on this server to another.
-           `destination` and `amount` are both `Account` objects. This action must not complete
-           successfully if the transfer cannot be performed."""
+    def transfer(self, author, source, destination, amount):
+        """Transfers a particular amount of money from one account on this server to another on
+           the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
+           This action must not complete successfully if the transfer cannot be performed."""
         raise NotImplementedError()
 
     def can_transfer(self, source, destination, amount):
@@ -79,7 +79,8 @@ class InMemoryServer(Server):
     def __init__(self):
         self.accounts = {}
         self.inv_accounts = {}
-        self.gov_account = self.open_account("@government")
+        self.gov_account = InMemoryServer.open_account(self, "@government")
+        self.gov_account.auth = Authorization.DEVELOPER
 
     def open_account(self, id, account_uuid=None):
         """Opens an empty account with a particular ID. Raises an exception if the account
@@ -108,14 +109,14 @@ class InMemoryServer(Server):
         """Gets the main government account for this server."""
         return self.gov_account
 
-    def authorize(self, account, auth_level):
-        """Sets an account's authorization level."""
+    def authorize(self, author, account, auth_level):
+        """Makes `author` set `account`'s authorization level to `auth_level`."""
         account.auth = auth_level
 
-    def transfer(self, source, destination, amount):
-        """Transfers a particular amount of money from one account on this server to another.
-           `destination` and `amount` are both `Account` objects. This action must not complete
-           successfully if the transfer cannot be performed."""
+    def transfer(self, author, source, destination, amount):
+        """Transfers a particular amount of money from one account on this server to another on
+           the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
+           This action must not complete successfully if the transfer cannot be performed."""
         if not self.can_transfer(source, destination, amount):
             raise Exception("Cannot perform transfer.")
 
@@ -182,9 +183,13 @@ class LedgerServer(InMemoryServer):
                 super().transfer(
                     self.get_account(elems[1]),
                     self.get_account(elems[2]),
-                    int(elems[3]))
+                    self.get_account(elems[3]),
+                    int(elems[4]))
             elif cmd == 'authorize':
-                super().authorize(self.get_account(elems[1]), Authorization[elems[2]])
+                super().authorize(
+                    self.get_account(elems[1]),
+                    self.get_account(elems[2]),
+                    Authorization[elems[3]])
             elif cmd == 'add-balance':
                 self.get_account(elems[1]).balance += int(elems[2])
             else:
@@ -201,19 +206,24 @@ class LedgerServer(InMemoryServer):
         self._ledger_write('open', id, account.get_uuid())
         return account
 
-    def authorize(self, account, auth_level):
-        """Sets an account's authorization level."""
+    def authorize(self, author, account, auth_level):
+        """Makes `author` set `account`'s authorization level to `auth_level`."""
         result = super().authorize(account, auth_level)
-        self._ledger_write('authorize', self.get_account_id(account), auth_level.name)
+        self._ledger_write(
+            'authorize',
+            self.get_account_id(author),
+            self.get_account_id(account),
+            auth_level.name)
         return result
 
-    def transfer(self, source, destination, amount):
-        """Transfers a particular amount of money from one account on this server to another.
-           `destination` and `amount` are both `Account` objects. This action must not complete
-           successfully if the transfer cannot be performed."""
-        account = super().transfer(source, destination, amount)
+    def transfer(self, author, source, destination, amount):
+        """Transfers a particular amount of money from one account on this server to another on
+           the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
+           This action must not complete successfully if the transfer cannot be performed."""
+        account = super().transfer(source, author, destination, amount)
         self._ledger_write(
             'transfer',
+            self.get_account_id(author),
             self.get_account_id(source),
             self.get_account_id(destination),
             amount)

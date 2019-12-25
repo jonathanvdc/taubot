@@ -29,16 +29,40 @@ def process_transfer(author, message, server):
 
     amount, destination_name = parse_result
 
-    if not server.has_account(author):
-        return 'Sorry, but I can\'t perform that transfer: you do not have an account yet. ' \
-            'You can open one with the `open` command.'
+    return perform_transfer(author, author, destination_name, amount, server)
 
-    sender = server.get_account(author)
+def parse_admin_transfer_command(message):
+    """Parses a transfer command message."""
+    body = message.split()
+    if len(body) != 4:
+        return None
 
-    if not server.has_account(destination_name):
-        return 'Sorry, but I can\'t perform that transfer: your beneficiary %s does not have an account yet.' % destination_name
+    _, sender, amount_text, destination = body
+    try:
+        amount = int(amount_text)
+    except ValueError:
+        return None
 
-    dest = server.get_account(destination_name)
+    return (sender, amount, destination)
+
+def process_admin_transfer(author, message, server):
+    """Processes an admin transfer command."""
+    assert_authorized(author, server, Authorization.ADMIN)
+    parse_result = parse_admin_transfer_command(message)
+
+    if parse_result is None:
+        return 'Admin transfer formatted incorrectly. Expected `admin-transfer AMOUNT SENDER BENEFICIARY`, ' \
+            'where AMOUNT is a positive integer and SENDER, BENEFICIARY are account holders.'
+
+    sender_name, amount, destination_name = parse_result
+
+    return perform_transfer(author, sender_name, destination_name, amount, server)
+
+def perform_transfer(author_name, sender_name, destination_name, amount, server):
+    """Helper function that performs a transfer."""
+    author = assert_is_account(author_name, server)
+    sender = assert_is_account(sender_name, server)
+    dest = assert_is_account(destination_name, server)
 
     # TODO: check for common reasons for why a transfer might not be able to go through (e.g., insufficient
     # balance) and provide a helpful error message for each of those cases.
@@ -46,7 +70,7 @@ def process_transfer(author, message, server):
     if not server.can_transfer(sender, dest, amount):
         return 'Sorry, but I can\'t perform that transfer.'
 
-    proof = server.transfer(sender, dest, amount)
+    proof = server.transfer(author, sender, dest, amount)
     proof_string = ' Proof: %s.' % proof if proof is not None else ''
     return 'Transfer performed successfully.%s' % proof_string
 
@@ -99,14 +123,14 @@ def parse_authorization(message):
 
 def process_authorization(author, message, server):
     """Processes a message requesting an authorization change."""
-    assert_authorized(author, server, Authorization.ADMIN)
+    author_account = assert_authorized(author, server, Authorization.ADMIN)
     parsed = parse_authorization(message)
     if parsed is None:
         raise CommandException('Authorization formatted incorrectly. The right format is `authorize BENEFICIARY [citizen|admin|developer]`.')
 
     beneficiary, auth_level = parsed
     beneficiary_account = assert_is_account(beneficiary, server)
-    server.authorize(beneficiary_account, auth_level)
+    server.authorize(author_account, beneficiary_account, auth_level)
     return '%s is now authorization with authorization level %s.' % (beneficiary, auth_level.name)
 
 
@@ -141,12 +165,17 @@ Hi %s! Here's a list of the commands I understand:
 # string here.
 COMMANDS = {
     'help': ('help', 'prints a help message.', process_help),
-    'transfer': ('transfer AMOUNT BENEFICIARY', 'transfers AMOUNT to user BENEFICIARY\'s account', process_transfer),
+    'transfer': ('transfer AMOUNT BENEFICIARY', 'transfers AMOUNT to user BENEFICIARY\'s account.', process_transfer),
     'open': ('open', 'opens a new account.', process_open_account),
     'balance': ('balance', 'prints the balance on your account.', process_balance),
     'authorize': (
         'authorize ACCOUNT [citizen|admin|developer]',
         'sets an account\'s authorization.',
         process_authorization,
-        Authorization.ADMIN)
+        Authorization.ADMIN),
+    'admin-transfer': (
+        'admin-transfer AMOUNT SENDER BENEFICIARY',
+        'transfers AMOUNT from SENDER to BENEFICIARY.',
+        process_admin_transfer,
+        Authorization.ADMIN),
 }
