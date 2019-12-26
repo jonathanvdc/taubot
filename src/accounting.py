@@ -335,7 +335,7 @@ class LedgerServer(InMemoryServer):
                 continue
 
             elems = line.split()
-            timestamp = float(line[0])
+            timestamp = float(elems[0])
             elems = elems[1:]
             cmd = elems[0]
             if cmd == 'open':
