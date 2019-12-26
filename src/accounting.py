@@ -2,6 +2,7 @@ import uuid
 import time
 import os.path
 from enum import Enum
+from Crypto.Hash import SHA3_256
 
 
 class Server(object):
@@ -316,6 +317,12 @@ class InMemoryRecurringTransfer(RecurringTransfer):
         """Gets the remaining amount to transfer."""
         return self.remaining_amount
 
+def compute_hash(previous_hash, elements):
+    """Computes the SHA3-256 hash digest of a previous hash and a list of strings."""
+    hash_obj = SHA3_256.new(previous_hash)
+    for item in elements:
+        hash_obj.update(item.encode('utf-8'))
+    return hash_obj
 
 class LedgerServer(InMemoryServer):
     """A server implementation that logs every action in a ledger.
@@ -325,6 +332,7 @@ class LedgerServer(InMemoryServer):
         """Initializes a ledger-based server."""
         super().__init__()
         self.last_tick_timestamp = time.time()
+        self.last_hash = b''
         if os.path.isfile(ledger_path):
             self._read_ledger(ledger_path)
         self.ledger_file = open(ledger_path, 'a')
@@ -345,8 +353,18 @@ class LedgerServer(InMemoryServer):
                 continue
 
             elems = line.split()
-            timestamp = float(elems[0])
-            elems = elems[1:]
+            hash_value = elems[0]
+            expected_hash = compute_hash(self.last_hash, elems[1:])
+
+            if expected_hash.hexdigest() != hash_value:
+                raise Exception(
+                    "Ledger hash value %s for '%s' does not match expected hash value %s." % (
+                        hash_value, ' '.join(elems[1:]), expected_hash.hexdigest()))
+
+            self.last_hash = expected_hash.digest()
+
+            timestamp = float(elems[1])
+            elems = elems[2:]
             cmd = elems[0]
             if cmd == 'open':
                 super().open_account(elems[1], elems[2])
@@ -385,8 +403,11 @@ class LedgerServer(InMemoryServer):
 
     def _ledger_write(self, *args):
         t = time.time()
+        elems = list(map(str, args))
+        new_hash = compute_hash(self.last_hash, [str(t)] + elems)
         self.ledger_file.writelines(
-            ' '.join([str(t)] + list(map(str, args))) + '\n')
+            ' '.join([new_hash.hexdigest(), str(t)] + elems) + '\n')
+        self.last_hash = new_hash.digest()
         return t
 
     def open_account(self, id, account_uuid=None):
