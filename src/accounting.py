@@ -1,6 +1,7 @@
 import uuid
 import time
 import os.path
+import random
 from enum import Enum
 from Crypto.Hash import SHA3_256
 
@@ -324,15 +325,73 @@ def compute_hash(previous_hash, elements):
         hash_obj.update(item.encode('utf-8'))
     return hash_obj
 
+def generate_salt_and_hash(previous_hash, elements, zero_count):
+    """Generates a salt, hash pair with the appropriate number of leading zeros."""
+    while True:
+        salt = str(random.randint(1, 1000000))
+        hash_obj = SHA3_256.new(previous_hash)
+        hash_obj.update(salt.encode('utf-8'))
+        for item in elements:
+            hash_obj.update(item.encode('utf-8'))
+        if has_leading_zeros(hash_obj.hexdigest(), zero_count):
+            return (salt, hash_obj)
+
+def has_leading_zeros(hexdigest, zero_count):
+    """Checks if a hex digest has at least `zero_count` leading zero bits."""
+    i = 0
+    for _ in range(zero_count // 4):
+        if hexdigest[i] != '0':
+            return False
+        i += 1
+
+    rem = zero_count % 4
+    if rem > 0:
+        digit = int(hexdigest[i], 16)
+        if rem == 1:
+            return digit < 8
+        elif rem == 2:
+            return digit < 4
+        elif rem == 3:
+            return digit < 2
+
+    return True
+
+def create_initial_ledger_entries(entries, leading_zero_count=12):
+    """Creates an initial ledger by annotating hashless ledger entries with hashes and salts.
+       `entries` is a list of unannotated ledger lines. A modified list of ledger lines is returned."""
+    last_hash = b''
+    results = []
+    for line in entries:
+        elems = line.split()
+        salt, line_hash = generate_salt_and_hash(last_hash, elems, leading_zero_count)
+        results.append(' '.join([line_hash.hexdigest(), salt] + elems))
+        last_hash = line_hash.digest()
+
+    return results
+
+def create_initial_ledger(unannotated_ledger_path, result_path, leading_zero_count=12):
+    """Creates an initial ledger by reading the unannotated ledger at `unannoted_ledger_path`,
+       annotating every line with a hash and a salt and then writing the result to
+       `result_path`."""
+    with open(unannotated_ledger_path, 'r') as f:
+        lines = f.readlines()
+
+    lines = create_initial_ledger_entries(lines, leading_zero_count)
+
+    with open(result_path, 'w') as f:
+        f.writelines(line + '\n' for line in lines)
+
+
 class LedgerServer(InMemoryServer):
     """A server implementation that logs every action in a ledger.
        The ledger can be read to reconstruct the state of the server."""
 
-    def __init__(self, ledger_path):
+    def __init__(self, ledger_path, leading_zero_count=12):
         """Initializes a ledger-based server."""
         super().__init__()
         self.last_tick_timestamp = time.time()
         self.last_hash = b''
+        self.leading_zero_count = leading_zero_count
         if os.path.isfile(ledger_path):
             self._read_ledger(ledger_path)
         self.ledger_file = open(ledger_path, 'a')
@@ -348,7 +407,7 @@ class LedgerServer(InMemoryServer):
         with open(ledger_path, 'r') as f:
             lines = f.readlines()
 
-        for line in lines:
+        for line_num, line in enumerate(lines):
             if line.isspace():
                 continue
 
@@ -358,13 +417,17 @@ class LedgerServer(InMemoryServer):
 
             if expected_hash.hexdigest() != hash_value:
                 raise Exception(
-                    "Ledger hash value %s for '%s' does not match expected hash value %s." % (
-                        hash_value, ' '.join(elems[1:]), expected_hash.hexdigest()))
+                    "Line %s: ledger hash value %s for '%s' does not match expected hash value %s." % (
+                        line_num + 1, hash_value, ' '.join(elems[1:]), expected_hash.hexdigest()))
+            elif not has_leading_zeros(hash_value, self.leading_zero_count):
+                raise Exception(
+                    "Line %s: hash value does not have at least %s leading zeros." % (
+                        line_num + 1, self.leading_zero_count))
 
             self.last_hash = expected_hash.digest()
 
-            timestamp = float(elems[1])
-            elems = elems[2:]
+            timestamp = float(elems[2])
+            elems = elems[3:]
             cmd = elems[0]
             if cmd == 'open':
                 super().open_account(elems[1], elems[2])
@@ -403,10 +466,10 @@ class LedgerServer(InMemoryServer):
 
     def _ledger_write(self, *args):
         t = time.time()
-        elems = list(map(str, args))
-        new_hash = compute_hash(self.last_hash, [str(t)] + elems)
+        elems = [str(t)] + list(map(str, args))
+        salt, new_hash = generate_salt_and_hash(self.last_hash, elems, self.leading_zero_count)
         self.ledger_file.writelines(
-            ' '.join([new_hash.hexdigest(), str(t)] + elems) + '\n')
+            ' '.join([new_hash.hexdigest(), salt] + elems) + '\n')
         self.last_hash = new_hash.digest()
         return t
 
