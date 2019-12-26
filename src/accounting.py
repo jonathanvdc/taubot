@@ -36,6 +36,10 @@ class Server(object):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
         raise NotImplementedError()
 
+    def print_money(self, author, account, amount):
+        """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
+        raise NotImplementedError()
+
     def get_recurring_transfer(self, id):
         """Gets a recurring transfer based on its ID."""
         raise NotImplementedError()
@@ -180,6 +184,10 @@ class InMemoryServer(Server):
     def authorize(self, author, account, auth_level):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
         account.auth = auth_level
+
+    def print_money(self, author, account, amount):
+        """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
+        account.balance += amount
 
     def transfer(self, author, source, destination, amount):
         """Transfers a particular amount of money from one account on this server to another on
@@ -351,8 +359,11 @@ class LedgerServer(InMemoryServer):
                     self.get_account(elems[1]),
                     self.get_account(elems[2]),
                     Authorization[elems[3]])
-            elif cmd == 'add-balance':
-                self.get_account(elems[1]).balance += int(elems[2])
+            elif cmd == 'print-money':
+                super().print_money(
+                    self.get_account(elems[1]),
+                    self.get_account(elems[2]),
+                    int(elems[3]))
             elif cmd == 'perform-recurring-transfer':
                 super().perform_recurring_transfer(
                     self.get_recurring_transfer(elems[1]),
@@ -392,6 +403,15 @@ class LedgerServer(InMemoryServer):
             self.get_account_id(account),
             auth_level.name)
         return result
+
+    def print_money(self, author, account, amount):
+        """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
+        super().print_money(author, account, amount)
+        self._ledger_write(
+            'print-money',
+            self.get_account_id(author),
+            self.get_account_id(account),
+            amount)
 
     def transfer(self, author, source, destination, amount):
         """Transfers a particular amount of money from one account on this server to another on

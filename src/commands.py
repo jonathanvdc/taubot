@@ -141,6 +141,32 @@ def process_list_accounts(author, message, server):
         for account in server.list_accounts()
     ])
 
+def parse_print_money(message):
+    """Parses a money printing request."""
+    body = message.split()
+    if len(body) != 3:
+        return None
+
+    _, amount_text, beneficiary = body
+    try:
+        amount = int(amount_text)
+    except ValueError:
+        return None
+    
+    return (amount, beneficiary)
+
+def process_print_money(author, message, server):
+    """Processes a request to print a batch of money and deposit it in an account."""
+    author_account = assert_authorized(author, server, Authorization.ADMIN)
+    parsed = parse_print_money(message)
+    if parsed is None:
+        raise CommandException('Command formatted incorrectly. Expected format `print-money AMOUNT BENEFICIARY`.')
+
+    amount, beneficiary = parsed
+    beneficiary_account = assert_is_account(beneficiary, server)
+    server.print_money(author_account, beneficiary_account, amount)
+    return 'Money printed successfully.'
+
 def list_commands(author, server):
     """Creates a list of all commands accepted by this bot."""
     return [
@@ -189,5 +215,10 @@ COMMANDS = {
         'list',
         'lists all accounts and the balance on the accounts.',
         process_list_accounts,
+        Authorization.ADMIN),
+    'print-money': (
+        'print-money AMOUNT BENEFICIARY',
+        'generates AMOUNT money and deposits it in BENEFICIARY\'s account.',
+        process_print_money,
         Authorization.ADMIN)
 }
