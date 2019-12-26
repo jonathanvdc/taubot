@@ -347,6 +347,18 @@ class LedgerServer(InMemoryServer):
                     Authorization[elems[3]])
             elif cmd == 'add-balance':
                 self.get_account(elems[1]).balance += int(elems[2])
+            elif cmd == 'perform-recurring-transfer':
+                super().perform_recurring_transfer(
+                    self.get_recurring_transfer(elems[1]),
+                    int(elems[2]))
+            elif cmd == 'create-recurring-transfer':
+                rec_transfer = super().create_recurring_transfer(
+                    self.get_account(elems[1]),
+                    self.get_account(elems[2]),
+                    self.get_account(elems[3]),
+                    int(elems[4]),
+                    int(elems[5]))
+                rec_transfer.uuid = elems[6]
             else:
                 raise Exception("Unknown ledger command '%s'." % cmd)
 
@@ -375,14 +387,37 @@ class LedgerServer(InMemoryServer):
         """Transfers a particular amount of money from one account on this server to another on
            the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
            This action must not complete successfully if the transfer cannot be performed."""
-        account = super().transfer(source, author, destination, amount)
+        result = super().transfer(source, author, destination, amount)
         self._ledger_write(
             'transfer',
             self.get_account_id(author),
             self.get_account_id(source),
             self.get_account_id(destination),
             amount)
-        return account
+        return result
+
+    def create_recurring_transfer(self, author, source, destination, total_amount, tick_count):
+        """Creates and registers a new recurring transfer, i.e., a transfer that is spread out over
+           many ticks. The transfer is authorized by `author` and consists of `total_amount` being
+           transferred from `source` to `destination` over the course of `tick_count` ticks. A tick
+           is a server-defined timespan."""
+        rec_transfer = super().create_recurring_transfer(author, source, destination, total_amount, tick_count)
+        self._ledger_write(
+            'create-recurring-transfer',
+            self.get_account_id(author),
+            self.get_account_id(source),
+            self.get_account_id(destination),
+            total_amount,
+            tick_count,
+            rec_transfer.get_id())
+        return rec_transfer
+
+    def perform_recurring_transfer(self, transfer, amount):
+        super().perform_recurring_transfer(transfer, amount)
+        self._ledger_write(
+            'perform-recurring-transfer',
+            transfer.get_id(),
+            amount)
 
 
 # TODO: import the backend.
