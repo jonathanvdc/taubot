@@ -314,6 +314,7 @@ class LedgerServer(InMemoryServer):
     def __init__(self, ledger_path):
         """Initializes a ledger-based server."""
         super().__init__()
+        self.last_tick_timestamp = time.time()
         if os.path.isfile(ledger_path):
             self._read_ledger(ledger_path)
         self.ledger_file = open(ledger_path, 'a')
@@ -330,7 +331,12 @@ class LedgerServer(InMemoryServer):
             lines = f.readlines()
 
         for line in lines:
-            elems = line.split()[1:]
+            if line.isspace():
+                continue
+
+            elems = line.split()
+            timestamp = float(line[0])
+            elems = elems[1:]
             cmd = elems[0]
             if cmd == 'open':
                 super().open_account(elems[1], elems[2])
@@ -359,12 +365,16 @@ class LedgerServer(InMemoryServer):
                     int(elems[4]),
                     int(elems[5]))
                 rec_transfer.uuid = elems[6]
+            elif cmd == 'tick':
+                self.last_tick_timestamp = timestamp
             else:
                 raise Exception("Unknown ledger command '%s'." % cmd)
 
     def _ledger_write(self, *args):
+        t = time.time()
         self.ledger_file.writelines(
-            ' '.join([str(time.time())] + list(map(str, args))) + '\n')
+            ' '.join([str(t)] + list(map(str, args))) + '\n')
+        return t
 
     def open_account(self, id, account_uuid=None):
         """Opens an empty account with a particular ID. Raises an exception if the account
@@ -395,6 +405,11 @@ class LedgerServer(InMemoryServer):
             self.get_account_id(destination),
             amount)
         return result
+
+    def notify_tick_elapsed(self):
+        """Notifies the server that a tick has elapsed."""
+        super().notify_tick_elapsed()
+        self.last_tick_timestamp = self._ledger_write('tick')
 
     def create_recurring_transfer(self, author, source, destination, total_amount, tick_count):
         """Creates and registers a new recurring transfer, i.e., a transfer that is spread out over
