@@ -207,12 +207,12 @@ class InMemoryServer(Server):
         """Produces a list of all recurring transfers."""
         return self.recurring_transfers.values()
 
-    def create_recurring_transfer(self, author, source, destination, total_amount, tick_count):
+    def create_recurring_transfer(self, author, source, destination, total_amount, tick_count, transfer_id=None):
         """Creates and registers a new recurring transfer, i.e., a transfer that is spread out over
            many ticks. The transfer is authorized by `author` and consists of `total_amount` being
            transferred from `source` to `destination` over the course of `tick_count` ticks. A tick
            is a server-defined timespan."""
-        rec_transfer = InMemoryRecurringTransfer(author, source, destination, total_amount, tick_count, total_amount)
+        rec_transfer = InMemoryRecurringTransfer(author, source, destination, total_amount, tick_count, total_amount, transfer_id)
         self.recurring_transfers[rec_transfer.get_id()] = rec_transfer
         return rec_transfer
 
@@ -237,10 +237,12 @@ class InMemoryServer(Server):
             del self.recurring_transfers[id]
 
     def perform_recurring_transfer(self, transfer, amount):
-        self.transfer(
+        InMemoryServer.transfer(
+            self,
             transfer.get_author(),
             transfer.get_source(),
-            transfer.get_destination(), amount)
+            transfer.get_destination(),
+            amount)
         transfer.remaining_amount -= amount
 
 
@@ -374,8 +376,8 @@ class LedgerServer(InMemoryServer):
                     self.get_account(elems[2]),
                     self.get_account(elems[3]),
                     int(elems[4]),
-                    int(elems[5]))
-                rec_transfer.uuid = elems[6]
+                    int(elems[5]),
+                    elems[6])
             elif cmd == 'tick':
                 self.last_tick_timestamp = timestamp
             else:
@@ -431,12 +433,12 @@ class LedgerServer(InMemoryServer):
         super().notify_tick_elapsed()
         self.last_tick_timestamp = self._ledger_write('tick')
 
-    def create_recurring_transfer(self, author, source, destination, total_amount, tick_count):
+    def create_recurring_transfer(self, author, source, destination, total_amount, tick_count, transfer_id=None):
         """Creates and registers a new recurring transfer, i.e., a transfer that is spread out over
            many ticks. The transfer is authorized by `author` and consists of `total_amount` being
            transferred from `source` to `destination` over the course of `tick_count` ticks. A tick
            is a server-defined timespan."""
-        rec_transfer = super().create_recurring_transfer(author, source, destination, total_amount, tick_count)
+        rec_transfer = super().create_recurring_transfer(author, source, destination, total_amount, tick_count, transfer_id)
         self._ledger_write(
             'create-recurring-transfer',
             self.get_account_id(author),

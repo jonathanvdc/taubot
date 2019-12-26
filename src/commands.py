@@ -167,6 +167,43 @@ def process_print_money(author, message, server):
     server.print_money(author_account, beneficiary_account, amount)
     return 'Money printed successfully.'
 
+def parse_admin_create_recurring_transfer(message):
+    """Parses an admin-create-recurring-transfer message."""
+    body = message.split()
+    if len(body) != 5:
+        return None
+
+    _, amount_text, sender, destination, tick_count_text = body
+    try:
+        amount = int(amount_text)
+        tick_count = int(tick_count_text)
+    except ValueError:
+        return None
+
+    return (amount, sender, destination, tick_count)
+
+def process_admin_create_recurring_transfer(author, message, server):
+    """Processes a request to set up an arbitrary recurring transfer."""
+    assert_authorized(author, server, Authorization.ADMIN)
+    parse_result = parse_admin_create_recurring_transfer(message)
+
+    if parse_result is None:
+        return 'Request formatted incorrectly. Expected `admin-create-recurring-transfer AMOUNT_PER_TICK SENDER BENEFICIARY TICK_COUNT`.'
+
+    amount, sender_name, destination_name, tick_count = parse_result
+
+    author_account = assert_is_account(author, server)
+    sender_account = assert_is_account(sender_name, server)
+    dest_account = assert_is_account(destination_name, server)
+
+    transfer = server.create_recurring_transfer(
+        author_account,
+        sender_account,
+        dest_account,
+        amount * tick_count,
+        tick_count)
+    return 'Recurring transfer set up with ID `%s`.' % transfer.get_id()
+
 def list_commands(author, server):
     """Creates a list of all commands accepted by this bot."""
     return [
@@ -220,5 +257,10 @@ COMMANDS = {
         'print-money AMOUNT BENEFICIARY',
         'generates AMOUNT money and deposits it in BENEFICIARY\'s account.',
         process_print_money,
+        Authorization.ADMIN),
+    'admin-create-recurring-transfer': (
+        'admin-create-recurring-transfer AMOUNT_PER_TICK SENDER BENEFICIARY TICK_COUNT',
+        'creates a transfer that will transfer AMOUNT_PER_TICK from SENDER to BENEFICIARY every tick, for TICK_COUNT ticks.',
+        process_admin_create_recurring_transfer,
         Authorization.ADMIN)
 }
