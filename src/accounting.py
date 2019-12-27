@@ -2,8 +2,10 @@ import uuid
 import time
 import os.path
 import random
+import base64
 from enum import Enum
 from Crypto.Hash import SHA3_256
+from Crypto.PublicKey import ECC
 
 
 class Server(object):
@@ -40,6 +42,10 @@ class Server(object):
 
     def print_money(self, author, account, amount):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
+        raise NotImplementedError()
+
+    def add_public_key(self, account, key: str):
+        """Associates a public key with an account. The key must be an ECC key as stored in a PEM file."""
         raise NotImplementedError()
 
     def get_recurring_transfer(self, id):
@@ -94,6 +100,12 @@ class Account(object):
 
     def get_authorization(self):
         """Gets this account's level of authorization."""
+        raise NotImplementedError()
+
+    def list_public_keys(self):
+        """Produces a list of all public keys associated with this account.
+           Every element of the list is a string that corresponds to the contents
+           of a PEM file describing an ECC key."""
         raise NotImplementedError()
 
 
@@ -187,6 +199,10 @@ class InMemoryServer(Server):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
         account.auth = auth_level
 
+    def add_public_key(self, account, key):
+        """Associates a public key with an account. The key must be an ECC key."""
+        account.public_keys.append(key)
+
     def print_money(self, author, account, amount):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
         account.balance += amount
@@ -258,6 +274,7 @@ class InMemoryAccount(Account):
         self.balance = 0
         self.frozen = False
         self.auth = Authorization.CITIZEN
+        self.public_keys = []
 
     def get_uuid(self):
         """Gets this account's unique identifier."""
@@ -274,6 +291,11 @@ class InMemoryAccount(Account):
     def get_authorization(self):
         """Gets this account's level of authorization."""
         return self.auth
+
+    def list_public_keys(self):
+        """Produces a list of all public keys associated with this account.
+           Every element of the list is an ECC key."""
+        return self.public_keys
 
 
 class InMemoryRecurringTransfer(RecurringTransfer):
@@ -408,7 +430,7 @@ class LedgerServer(InMemoryServer):
             lines = f.readlines()
 
         for line_num, line in enumerate(lines):
-            if line.isspace():
+            if line.isspace() or line == '':
                 continue
 
             elems = line.split()
@@ -459,6 +481,11 @@ class LedgerServer(InMemoryServer):
                     int(elems[4]),
                     int(elems[5]),
                     elems[6])
+            elif cmd == 'add-public-key':
+                key = base64.b64decode(elems[2]).decode('utf-8')
+                super().add_public_key(
+                    self.get_account(elems[1]),
+                    ECC.import_key(key))
             elif cmd == 'tick':
                 self.last_tick_timestamp = timestamp
             else:
@@ -489,6 +516,14 @@ class LedgerServer(InMemoryServer):
             self.get_account_id(account),
             auth_level.name)
         return result
+
+    def add_public_key(self, account, key: str):
+        """Associates a public key with an account. The key must be an ECC key as stored in a PEM file."""
+        super().add_public_key(account, key)
+        self._ledger_write(
+            'add-public-key',
+            self.get_account_id(account),
+            base64.b64encode(key.export_key(format='PEM').encode('utf-8')).decode('utf-8'))
 
     def print_money(self, author, account, amount):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""

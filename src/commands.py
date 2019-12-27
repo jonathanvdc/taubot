@@ -1,5 +1,6 @@
 # This module defines logic for processing bot commands.
 from accounting import Authorization
+from Crypto.PublicKey import ECC
 
 class CommandException(Exception):
     """The type of exception that is thrown when a command fails."""
@@ -107,6 +108,19 @@ def process_balance(author, message, server):
     account = server.get_account(author)
     main_response = 'The balance on your account is %s.' % account.get_balance()
     return 'Hi there %s %s. %s Have a great day.' % (account.get_authorization().name.lower(), author, main_response)
+
+def process_add_public_key(author, message, server):
+    """Processes a message that requests for a public key to be associated with an account."""
+    account = assert_is_account(author, server)
+    pem = '\n'.join(line for line in message.split('\n')[1:] if line != '' and not line.isspace())
+    try:
+        print(repr(pem))
+        key = ECC.import_key(pem)
+    except Exception as e:
+        raise CommandException("Incorrectly formatted key. Inner error message: %s." % str(e))
+
+    server.add_public_key(account, key)
+    return 'Public key added successfully.'
 
 def assert_is_account(account_name, server):
     """Asserts that a particular account exists. Returns the account."""
@@ -254,6 +268,11 @@ COMMANDS = {
     'transfer': ('transfer AMOUNT BENEFICIARY', 'transfers AMOUNT to user BENEFICIARY\'s account.', process_transfer),
     'open': ('open', 'opens a new account.', process_open_account),
     'balance': ('balance', 'prints the balance on your account.', process_balance),
+    'add-public-key': (
+        'add-public-key',
+        'associates a public key with your account. '
+        'The public key should be encoded as the contents of a PEM file that is placed on a line after the command itself.',
+        process_add_public_key),
     'authorize': (
         'authorize ACCOUNT citizen|admin|developer',
         'sets an account\'s authorization.',
