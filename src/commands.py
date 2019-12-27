@@ -282,7 +282,7 @@ COMMANDS = {
         'makes PROXIED_ACCOUNT describes the action described in the remainder of the message (starting on the next line). '
         'SIGNATURE must be an ECDSA-signed SHA3-512 hash of the remainder of the message, where the key that signs the '
         'message must have its public key associated with the proxied account. This command allows a user or application to '
-        'safely perform actions on an account holder behalf.',
+        'safely perform actions on an account holder\'s behalf.',
         process_proxy_command),
     'authorize': (
         'authorize ACCOUNT citizen|admin|developer',
