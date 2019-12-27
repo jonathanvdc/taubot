@@ -354,7 +354,7 @@ COMMANDS = {
     'balance': ('balance', 'prints the balance on your account.', process_balance),
     'add-public-key': (
         'add-public-key',
-        'associates a public key with your account. '
+        'associates an ECC public key with your account. '
         'The public key should be encoded as the contents of a PEM file that is placed on a line after the command itself.',
         process_add_public_key),
     'proxy': (
