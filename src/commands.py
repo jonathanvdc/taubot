@@ -82,6 +82,22 @@ def process_open_account(author, message, server):
     server.open_account(author)
     return 'Hi there %s. Your account has been opened successfully. Thank you for your business.' % author
 
+def process_admin_open_account(author, message, server):
+    """Processes a message that tries to open a new account."""
+    assert_authorized(author, server, Authorization.ADMIN)
+    body = message.split()
+    if len(body) != 2:
+        raise CommandException(
+            'Incorrectly formatted command; expected `admin-open ACCOUNT_NAME`, '
+            'where `ACCOUNT_NAME` is the name of the account to create.')
+
+    account_name = body[1]
+    if server.has_account(account_name):
+        raise CommandException('Account `%s` already exists.' % account_name)
+
+    server.open_account(account_name)
+    return 'Account `%s` has been opened successfully.' % account_name
+
 def process_balance(author, message, server):
     """Processes a message requesting the balance on an account."""
     if not server.has_account(author):
@@ -262,5 +278,11 @@ COMMANDS = {
         'admin-create-recurring-transfer AMOUNT_PER_TICK SENDER BENEFICIARY TICK_COUNT',
         'creates a transfer that will transfer AMOUNT_PER_TICK from SENDER to BENEFICIARY every tick, for TICK_COUNT ticks.',
         process_admin_create_recurring_transfer,
+        Authorization.ADMIN),
+    'admin-open': (
+        'admin-open ACCOUNT_NAME',
+        'opens a new account with a particular name. '
+            'If a user has ACCOUNT_NAME, then the newly created account will become that user\'s account.',
+        process_admin_open_account,
         Authorization.ADMIN)
 }

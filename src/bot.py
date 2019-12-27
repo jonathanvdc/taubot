@@ -62,8 +62,8 @@ def process_all_messages(reddit, server):
 
 if __name__ == '__main__':
     reddit = create_reddit(read_config())
-    # Let's make a tick five seconds for now (should be way longer later).
-    tick_duration = 5
+    # Let's make a tick five minutes for now (should be way longer later).
+    tick_duration = 5 * 60
     with LedgerServer('ledger.txt') as server:
         while True:
             # Process messages.
