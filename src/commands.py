@@ -295,7 +295,7 @@ def process_proxy_command(author, message, server):
             break
 
     if any_verified:
-        return process_command(account_name, message, server)
+        return process_command(account_name, command, server)
     else:
         raise CommandException('Cannot execute command by proxy because the signature is invalid.')
 
@@ -311,7 +311,7 @@ def process_command(author, message, server):
             if len(cmd) >= 4 and cmd[3].value > Authorization.CITIZEN.value:
                 assert_authorized(author, server, cmd[3])
 
-            return cmd[2](author, message.body, server)
+            return cmd[2](author, message, server)
         except CommandException as e:
             return str(e)
     else:
