@@ -269,6 +269,14 @@ def parse_proxy_command(message):
     else:
         return result
 
+def compose_proxy_command(proxied_account_name, key, command):
+    """Composes a proxy command."""
+    command = command.strip()
+    command_hash = SHA3_512.new(command.encode('utf-8'))
+    signer = DSS.new(key, 'fips-186-3')
+    signature = base64.b64encode(signer.sign(command_hash)).decode('utf-8')
+    return 'proxy dsa %s %s\n%s' % (proxied_account_name, signature, command)
+
 def process_proxy_command(author, message, server):
     """Processes a command by proxy."""
     account_name, signature, command = parse_proxy_command(message)
