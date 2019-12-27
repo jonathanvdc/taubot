@@ -1,6 +1,10 @@
 # This module defines logic for processing bot commands.
+import base64
 from accounting import Authorization
 from Crypto.PublicKey import ECC
+from Crypto.Signature import DSS
+from Crypto.Hash import SHA3_512
+
 
 class CommandException(Exception):
     """The type of exception that is thrown when a command fails."""
@@ -234,9 +238,77 @@ def process_admin_create_recurring_transfer(author, message, server):
         tick_count)
     return 'Recurring transfer set up with ID `%s`.' % transfer.get_id()
 
+def parse_proxy_command(message):
+    """Parses a proxy command into its components."""
+    def parse_impl():
+        split_message = message.split('\n', 1)
+        if len(split_message) != 2:
+            return None
+
+        proxy_line, command = split_message
+        command = command.strip('\n\r')
+
+        proxy_elems = proxy_line.split()
+        if len(proxy_elems) != 4:
+            return None
+
+        _, protocol, account_name, enc_signature = proxy_elems
+        if protocol != 'dsa':
+            return None
+
+        try:
+            signature = base64.b64decode(enc_signature)
+        except Exception as e:
+            raise CommandException("Invalid signature. %s" % str(e))
+
+        return (account_name, signature, command)
+
+    result = parse_impl()
+    if result == None:
+        raise CommandException('Invalid formatting; expected `proxy dsa PROXIED_ACCOUNT SIGNATURE` followed by another command on the next line.')
+    else:
+        return result
+
 def process_proxy_command(author, message, server):
     """Processes a command by proxy."""
-    return 'Not implemented yet.'
+    account_name, signature, command = parse_proxy_command(message)
+    account = assert_is_account(account_name, server)
+    command_hash = SHA3_512.new(command.encode('utf-8'))
+    any_verified = False
+    for key in account.list_public_keys():
+        verifier = DSS.new(key, 'fips-186-3')
+        try:
+            verifier.verify(command_hash, signature)
+            any_verified = True
+        except ValueError:
+            pass
+
+        if any_verified:
+            break
+
+    if any_verified:
+        return process_command(account_name, message, server)
+    else:
+        raise CommandException('Cannot execute command by proxy because the signature is invalid.')
+
+def process_command(author, message, server):
+    """Processes an arbitrary command."""
+    split_msg = message.split()
+    if len(split_msg) == 0:
+        return 'Hi %s! You sent me an empty message. Here\'s a list of commands I do understand:\n\n%s' % (
+            author, list_commands_as_markdown(author, server))
+    elif split_msg[0] in COMMANDS:
+        try:
+            cmd = COMMANDS[split_msg[0]]
+            if len(cmd) >= 4 and cmd[3].value > Authorization.CITIZEN.value:
+                assert_authorized(author, server, cmd[3])
+
+            return cmd[2](author, message.body, server)
+        except CommandException as e:
+            return str(e)
+    else:
+        return 'Hi %s! I didn\'t quite understand command your command `%s`. Here\'s a list of commands I do understand:\n\n%s' % (
+            author, split_msg[0], list_commands_as_markdown(author, server))
 
 def list_commands(author, server):
     """Creates a list of all commands accepted by this bot."""
@@ -278,7 +350,7 @@ COMMANDS = {
         'The public key should be encoded as the contents of a PEM file that is placed on a line after the command itself.',
         process_add_public_key),
     'proxy': (
-        'proxy ecdsa PROXIED_ACCOUNT SIGNATURE',
+        'proxy dsa PROXIED_ACCOUNT SIGNATURE',
         'makes PROXIED_ACCOUNT describes the action described in the remainder of the message (starting on the next line). '
         'SIGNATURE must be an ECDSA-signed SHA3-512 hash of the remainder of the message, where the key that signs the '
         'message must have its public key associated with the proxied account. This command allows a user or application to '
