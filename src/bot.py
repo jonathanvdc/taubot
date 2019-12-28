@@ -60,6 +60,23 @@ async def reddit_loop(reddit, server):
         # Sleep for five seconds.
         await asyncio.sleep(5)
 
+def split_into_chunks(message: bytes, max_length):
+    """Splits a message into chunks. Prefers to split at newlines."""
+    if len(message) < max_length:
+        return message
+
+    split_index = max_length
+    newline_index = 0
+    last_newline_index = -1
+    while newline_index >= 0:
+        last_newline_index = newline_index
+        newline_index = message.find(b'\n', newline_index + 1, split_index)
+
+    if last_newline_index > 0:
+        split_index = last_newline_index
+
+    return [message[:split_index], split_into_chunks(message[split_index:], max_length)]
+
 if __name__ == '__main__':
     config = read_config()
     reddit = create_reddit(config)
@@ -77,13 +94,16 @@ if __name__ == '__main__':
             '<@!%s>' % discord_client.user.id)
 
         if content.startswith(prefixes):
-            await message.channel.send(
-                '<@%s> %s' % (
-                    message.author.id,
-                    process_command(
-                        DiscordAccountId(str(message.author.id)),
-                        content[content.index('>') + 1:].lstrip(),
-                        server)))
+            response = '<@%s> %s' % (
+                message.author.id,
+                process_command(
+                    DiscordAccountId(str(message.author.id)),
+                    content[content.index('>') + 1:].lstrip(),
+                    server))
+
+            chunks = split_into_chunks(response.encode('utf-8'), 2000)
+            for chunk in chunks:
+                await message.channel.send(chunk.decode('utf-8'))
 
     with LedgerServer('ledger.txt') as server:
         asyncio.get_event_loop().create_task(reddit_loop(reddit, server))
