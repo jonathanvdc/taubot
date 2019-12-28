@@ -67,8 +67,11 @@ class DiscordAccountId(AccountId):
 
 def parse_account_id(value: str) -> AccountId:
     """Parses an account ID."""
-    if (value.startswith("<@") or value.startswith("<!@")) and value.endswith(">"):
-        return DiscordAccountId(value[value.index("@") + 1 : -1])
+    if value.startswith("<@") and value.endswith(">"):
+        if value.startswith("<@!"):
+            return DiscordAccountId(value[value.index("!") + 1 : -1])
+        else:
+            return DiscordAccountId(value[value.index("@") + 1 : -1])
     elif value.startswith('discord/'):
         return DiscordAccountId(value[len('discord/'):])
     else:
