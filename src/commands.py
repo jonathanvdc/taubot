@@ -349,7 +349,7 @@ Hi %s! Here's a list of the commands I understand:
 # string here.
 COMMANDS = {
     'help': ('help', 'prints a help message.', process_help),
-    'transfer': ('transfer AMOUNT BENEFICIARY', 'transfers AMOUNT to user BENEFICIARY\'s account.', process_transfer),
+    'transfer': ('transfer AMOUNT BENEFICIARY', 'transfers `AMOUNT` to user `BENEFICIARY`\'s account.', process_transfer),
     'open': ('open', 'opens a new account.', process_open_account),
     'balance': ('balance', 'prints the balance on your account.', process_balance),
     'add-public-key': (
@@ -359,8 +359,8 @@ COMMANDS = {
         process_add_public_key),
     'proxy': (
         'proxy dsa PROXIED_ACCOUNT SIGNATURE',
-        'makes PROXIED_ACCOUNT describes the action described in the remainder of the message (starting on the next line). '
-        'SIGNATURE must be an ECDSA-signed SHA3-512 hash of the remainder of the message, where the key that signs the '
+        'makes `PROXIED_ACCOUNT` perform the action described in the remainder of the message (starting on the next line). '
+        '`SIGNATURE` must be an ECDSA-signed SHA3-512 hash of the remainder of the message, where the key that signs the '
         'message must have its public key associated with the proxied account. This command allows a user or application to '
         'safely perform actions on an account holder\'s behalf.',
         process_proxy_command),
@@ -371,7 +371,7 @@ COMMANDS = {
         Authorization.ADMIN),
     'admin-transfer': (
         'admin-transfer AMOUNT SENDER BENEFICIARY',
-        'transfers AMOUNT from SENDER to BENEFICIARY.',
+        'transfers `AMOUNT` from `SENDER` to `BENEFICIARY`.',
         process_admin_transfer,
         Authorization.ADMIN),
     'list': (
@@ -381,18 +381,18 @@ COMMANDS = {
         Authorization.ADMIN),
     'print-money': (
         'print-money AMOUNT BENEFICIARY',
-        'generates AMOUNT money and deposits it in BENEFICIARY\'s account.',
+        'generates `AMOUNT` money and deposits it in `BENEFICIARY`\'s account.',
         process_print_money,
         Authorization.ADMIN),
     'admin-create-recurring-transfer': (
         'admin-create-recurring-transfer AMOUNT_PER_TICK SENDER BENEFICIARY TICK_COUNT',
-        'creates a transfer that will transfer AMOUNT_PER_TICK from SENDER to BENEFICIARY every tick, for TICK_COUNT ticks.',
+        'creates a transfer that will transfer `AMOUNT_PER_TICK` from `SENDER` to `BENEFICIARY` every tick, for `TICK_COUNT` ticks.',
         process_admin_create_recurring_transfer,
         Authorization.ADMIN),
     'admin-open': (
         'admin-open ACCOUNT_NAME',
-        'opens a new account with a particular name. '
-            'If a user has ACCOUNT_NAME, then the newly created account will become that user\'s account.',
+        'opens a new account with name `ACCOUNT_NAME`. '
+            'If an existing user has `ACCOUNT_NAME`, then the newly created account will become that user\'s account.',
         process_admin_open_account,
         Authorization.ADMIN)
 }
