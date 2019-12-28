@@ -153,6 +153,10 @@ class Server(object):
            already exists. Otherwise returns the newly opened account."""
         raise NotImplementedError()
 
+    def add_account_alias(self, account: Account, alias_id: AccountId):
+        """Associates an additional ID with an account."""
+        raise NotImplementedError()
+
     def get_account(self, id: AccountId) -> Account:
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         raise NotImplementedError()
@@ -167,7 +171,7 @@ class Server(object):
 
     def get_account_id(self, account: Account) -> AccountId:
         """Gets a representative local account ID. Raises an exception if the account is not registered here."""
-        return get_account_ids[0]
+        return self.get_account_ids(account)[0]
 
     def has_account(self, id: AccountId) -> bool:
         """Tests if an account with a particular ID exists on this server."""
@@ -255,6 +259,10 @@ class InMemoryServer(Server):
         self.accounts[id] = account
         self.inv_accounts[account].append(id)
         return account
+
+    def add_account_alias(self, account: Account, alias_id: AccountId):
+        """Associates an additional ID with an account."""
+        self.inv_accounts[account].append(alias_id)
 
     def get_account(self, id: AccountId):
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
@@ -567,6 +575,10 @@ class LedgerServer(InMemoryServer):
                 super().add_public_key(
                     self.get_account_from_string(elems[1]),
                     ECC.import_key(key))
+            elif cmd == 'add-alias':
+                super().add_account_alias(
+                    self.get_account_from_string(elems[1]),
+                    parse_account_id(elems[2]))
             elif cmd == 'tick':
                 self.last_tick_timestamp = timestamp
             else:
@@ -587,6 +599,14 @@ class LedgerServer(InMemoryServer):
         account = super().open_account(id, account_uuid)
         self._ledger_write('open', id, account.get_uuid())
         return account
+
+    def add_account_alias(self, account: Account, alias_id: AccountId):
+        """Associates an additional ID with an account."""
+        super().add_account_alias(account, alias_id)
+        self._ledger_write(
+            'add-alias',
+            self.get_account_id(account),
+            alias_id)
 
     def authorize(self, author, account, auth_level):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
