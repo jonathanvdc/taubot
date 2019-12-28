@@ -72,17 +72,18 @@ if __name__ == '__main__':
             return
 
         content = message.content.lstrip()
-        if content.startswith('$tau '):
+        prefixes = (
+            '<@%s>' % discord_client.user.id,
+            '<@!%s>' % discord_client.user.id)
+
+        if content.startswith(prefixes):
             await message.channel.send(
                 '<@%s> %s' % (
                     message.author.id,
                     process_command(
                         str(message.author.id),
-                        content[len('$tau '):].lstrip(),
+                        content[content.index('>') + 1:].lstrip(),
                         server)))
-
-        if message.content.startswith('$hello'):
-            await message.channel.send('Hello!')
 
     with LedgerServer('ledger.txt') as server:
         asyncio.get_event_loop().create_task(reddit_loop(reddit, server))
