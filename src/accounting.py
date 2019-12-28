@@ -42,8 +42,8 @@ class AccountId(object):
         return str(self) > str(other)
 
 
-class StringAccountId(AccountId):
-    """An account identifier that is a simple string."""
+class RedditAccountId(AccountId):
+    """An account identifier for Reddit accounts."""
     def __init__(self, value):
         self.value = value
 
@@ -70,7 +70,7 @@ def parse_account_id(value: str) -> AccountId:
     elif value.startswith('discord/'):
         return DiscordAccountId(value[len('discord/') + 1:])
     else:
-        return StringAccountId(value)
+        return RedditAccountId(value)
 
 
 class Authorization(Enum):
