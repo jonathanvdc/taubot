@@ -70,7 +70,7 @@ def parse_account_id(value: str) -> AccountId:
     if (value.startswith("<@") or value.startswith("<!@")) and value.endswith(">"):
         return DiscordAccountId(value[value.index("@") + 1 : -1])
     elif value.startswith('discord/'):
-        return DiscordAccountId(value[len('discord/') + 1:])
+        return DiscordAccountId(value[len('discord/'):])
     else:
         return RedditAccountId(value)
 
@@ -262,6 +262,7 @@ class InMemoryServer(Server):
 
     def add_account_alias(self, account: Account, alias_id: AccountId):
         """Associates an additional ID with an account."""
+        self.accounts[alias_id] = account
         self.inv_accounts[account].append(alias_id)
 
     def get_account(self, id: AccountId):

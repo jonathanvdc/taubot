@@ -44,8 +44,8 @@ def process_all_messages(reddit, server):
 
 async def reddit_loop(reddit, server):
     """The bot's main Reddit loop."""
-    # Let's make a tick five minutes for now (should be way longer later).
-    tick_duration = 5 * 60
+    # Let's make a tick twice every day.
+    tick_duration = 12 * 60 * 60
 
     while True:
         # Process messages.

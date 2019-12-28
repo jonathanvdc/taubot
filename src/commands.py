@@ -119,7 +119,6 @@ def process_add_public_key(author: AccountId, message: str, server: Server):
     account = assert_is_account(author, server)
     pem = '\n'.join(line for line in message.split('\n')[1:] if line != '' and not line.isspace())
     try:
-        print(repr(pem))
         key = ECC.import_key(pem)
     except Exception as e:
         raise CommandException("Incorrectly formatted key. Inner error message: %s." % str(e))
@@ -177,7 +176,7 @@ def process_authorization(author: AccountId, message: str, server: Server):
 def process_list_accounts(author: AccountId, message: str, server: Server):
     """Processes a message requesting a list of all accounts."""
     return '\n'.join(['| Account | Balance |', '| --- | --- |'] + [
-        '| %s | %s |' % (' / '.join(str(x) for x in server.get_account_ids(account)), account.get_balance())
+        '| %s | %s |' % (' aka '.join(str(x) for x in server.get_account_ids(account)), account.get_balance())
         for account in server.list_accounts()
     ])
 
@@ -342,8 +341,8 @@ def process_request_alias(author: AccountId, message: str, server: Server):
 
     # At this point we will allow the private key to be forgotten.
 
-    return ('Your alias request code for account {0} is `{1}`. '
-        'Make {0} an alias for this account ({2}) using the `add-alias` command.').format(
+    return ('Your alias request code for account {0} can be found below. '
+        'Make {0} an alias for this account ({2}) using the `add-alias` command.\n\n```\n{1}\n```').format(
             str(alias_id), signature, author.readable())
 
 def process_add_alias(author: AccountId, message: str, server: Server):
