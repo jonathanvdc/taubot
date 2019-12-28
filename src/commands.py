@@ -262,12 +262,7 @@ def parse_proxy_command(message):
         if protocol != 'dsa':
             return None
 
-        try:
-            signature = base64.b64decode(enc_signature)
-        except Exception as e:
-            raise CommandException("Invalid signature. %s" % str(e))
-
-        return (parse_account_id(account_name), signature, command)
+        return (parse_account_id(account_name), enc_signature, command)
 
     result = parse_impl()
     if result == None:
@@ -275,24 +270,31 @@ def parse_proxy_command(message):
     else:
         return result
 
+def sign_message(message: str, key) -> str:
+    """Signs a message's SHA3-512 digest using the DSA algorithm."""
+    message = message.strip()
+    message_hash = SHA3_512.new(message.encode('utf-8'))
+    signer = DSS.new(key, 'fips-186-3')
+    return base64.b64encode(signer.sign(message_hash)).decode('utf-8')
+
 def compose_proxy_command(proxied_account_name, key, command):
     """Composes a proxy command."""
     command = command.strip()
-    command_hash = SHA3_512.new(command.encode('utf-8'))
-    signer = DSS.new(key, 'fips-186-3')
-    signature = base64.b64encode(signer.sign(command_hash)).decode('utf-8')
-    return 'proxy dsa %s %s\n%s' % (proxied_account_name, signature, command)
+    return 'proxy dsa %s %s\n%s' % (proxied_account_name, sign_message(command, key), command)
 
-def process_proxy_command(author: AccountId, message: str, server: Server):
-    """Processes a command by proxy."""
-    account_name, signature, command = parse_proxy_command(message)
-    account = assert_is_account(account_name, server)
-    command_hash = SHA3_512.new(command.encode('utf-8'))
+def is_signed_by(account: Account, message: str, base64_signature: str) -> bool:
+    """Checks if `message` with signature `base64_signature` was signed by `account`."""
+    try:
+        signature = base64.b64decode(base64_signature)
+    except Exception as e:
+        raise CommandException('Invalid signature. %s' % str(e))
+
+    message_hash = SHA3_512.new(message.strip().encode('utf-8'))
     any_verified = False
     for key in account.list_public_keys():
         verifier = DSS.new(key, 'fips-186-3')
         try:
-            verifier.verify(command_hash, signature)
+            verifier.verify(message_hash, signature)
             any_verified = True
         except ValueError:
             pass
@@ -300,10 +302,69 @@ def process_proxy_command(author: AccountId, message: str, server: Server):
         if any_verified:
             break
 
-    if any_verified:
+    return any_verified
+
+def process_proxy_command(author: AccountId, message: str, server: Server):
+    """Processes a command by proxy."""
+    account_name, signature, command = parse_proxy_command(message)
+    account = assert_is_account(account_name, server)
+
+    if is_signed_by(account, command, signature):
         return process_command(parse_account_id(account_name), command, server)
     else:
         raise CommandException('Cannot execute command by proxy because the signature is invalid.')
+
+def process_name(author: AccountId, message: str, server: Server):
+    """Processes a request for an account name."""
+    return 'Hello there %s. Your local account ID is `%s`.' % (author.readable(), str(author))
+
+def process_request_alias(author: AccountId, message: str, server: Server):
+    """Processes a request for an alias code."""
+    account = assert_is_account(author, server)
+
+    split_msg = message.split()
+    if len(split_msg) != 2:
+        raise CommandException('Incorrect formatting. Expected `request-alias ALIAS_ACCOUNT_NAME`.')
+
+    _, alias_name = split_msg
+    alias_id = parse_account_id(alias_name)
+    if server.has_account(alias_id):
+        raise CommandException(
+            'An account has already been associated with %s, so it cannot be an alias for this account.' %
+            alias_id.readable())
+
+    # To generate an alias code, we generate an ECC public/private key pair, use the
+    # private key to generate a signed version of the aliased account name and associate
+    # the public key with the account.
+    key = ECC.generate(curve='P-256')
+    signature = sign_message(str(alias_id), key)
+    server.add_public_key(account, key.public_key())
+
+    # At this point we will allow the private key to be forgotten.
+
+    return ('Your alias request code for account {0} is `{1}`. '
+        'Make {0} an alias for this account ({2}) using the `add-alias` command.').format(
+            str(alias_id), signature, author.readable())
+
+def process_add_alias(author: AccountId, message: str, server: Server):
+    """Processes a request to add `author` as an alias to an account."""
+    if server.has_account(author):
+        raise CommandException(
+            'An account has already been associated with %s, so it cannot be an alias for another account.' % author.readable())
+
+    split_msg = message.split()
+    if len(split_msg) != 3:
+        raise CommandException('Incorrect formatting. Expected `add-alias ALIASED_ACCOUNT ALIAS_REQUEST_CODE`.')
+
+    _, aliased_account_name, signature = split_msg
+    aliased_account = assert_is_account(aliased_account_name, server)
+
+    if is_signed_by(aliased_account, str(author), signature):
+        server.add_account_alias(aliased_account, author)
+        return 'Alias set up sucessfully. %s and %s now refer to the same account.' % (
+            aliased_account_name, author.readable())
+    else:
+        raise CommandException('Cannot set up alias because the signature is invalid.')
 
 def process_command(author: AccountId, message: str, server: Server):
     """Processes an arbitrary command."""
@@ -370,6 +431,23 @@ COMMANDS = {
         'message must have its public key associated with the proxied account. This command allows a user or application to '
         'safely perform actions on an account holder\'s behalf.',
         process_proxy_command),
+    'request-alias': (
+        'request-alias ALIAS_ACCOUNT_NAME',
+        'generates a code that will allow you to securely associate an alias `ALIAS_ACCOUNT_NAME` with this account. '
+        'Concretely, an alias is an additional Reddit or Discord user that you can use to directly '
+        'manage this account. If you don\'t know what to put in `ALIAS_ACCOUNT_NAME`, use the name produced by the `name` command.',
+        process_request_alias),
+    'add-alias': (
+        'add-alias ALIASED_ACCOUNT ALIAS_REQUEST_CODE',
+        'registers this account as an alias for `ALIASED_ACCOUNT`. `ALIAS_REQUEST_CODE` must be a code '
+        'generated by `ALIASED_ACCOUNT` using the `request-alias` command. **NOTE:** for this to work, '
+        'the Reddit/Discord account that sends this message **must not** be associated with an existing '
+        'account yet.',
+        process_add_alias),
+    'name': (
+        'name',
+        'responds with your account name, even if you don\'t have an account yet.',
+        process_name),
     'authorize': (
         'authorize ACCOUNT citizen|admin|developer',
         'sets an account\'s authorization.',
