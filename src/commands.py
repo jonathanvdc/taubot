@@ -321,7 +321,7 @@ def process_command(author, message, server):
 def list_commands(author, server):
     """Creates a list of all commands accepted by this bot."""
     return [
-        '`%s` &ndash; %s' % (COMMANDS[key][0], COMMANDS[key][1])
+        '`%s` – %s' % (COMMANDS[key][0], COMMANDS[key][1])
         for key in sorted(COMMANDS)
         if len(COMMANDS[key]) < 4 or get_authorization_or_citizen(author, server).value >= COMMANDS[key][3].value
     ]
