@@ -618,8 +618,8 @@ class LedgerServer(InMemoryServer):
             auth_level.name)
         return result
 
-    def add_public_key(self, account, key: str):
-        """Associates a public key with an account. The key must be an ECC key as stored in a PEM file."""
+    def add_public_key(self, account, key):
+        """Associates a public key with an account. The key must be an ECC key."""
         super().add_public_key(account, key)
         self._ledger_write(
             'add-public-key',
