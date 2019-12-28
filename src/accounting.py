@@ -8,6 +8,69 @@ from Crypto.Hash import SHA3_256
 from Crypto.PublicKey import ECC
 
 
+class AccountId(object):
+    """A base class for account identifiers."""
+
+    def __str__(self) -> str:
+        """Turns the account ID into a machine-readable string."""
+        raise NotImplementedError()
+
+    def readable(self) -> str:
+        """Turns the account ID into a human-readable string suitable for
+           communication with humans."""
+        return str(self)
+
+    def __eq__(self, other):
+        return str(self) == str(other)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(str(self))
+
+    def __lt__(self, other):
+        return str(self) < str(other)
+
+    def __le__(self, other):
+        return str(self) <= str(other)
+
+    def __ge__(self, other):
+        return str(self) >= str(other)
+
+    def __gt__(self, other):
+        return str(self) > str(other)
+
+
+class StringAccountId(AccountId):
+    """An account identifier that is a simple string."""
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return self.value
+
+
+class DiscordAccountId(AccountId):
+    """An account identifier for Discord mentions."""
+    def __init__(self, discord_id):
+        self.discord_id = discord_id
+
+    def readable(self):
+        return '<@%s>' % self.discord_id
+
+    def __str__(self):
+        return 'discord/%s' % self.discord_id
+
+
+def parse_account_id(value: str) -> AccountId:
+    """Parses an accunt ID."""
+    if (value.startswith("<@") or value.startswith("<!@")) and value.endswith(">"):
+        return DiscordAccountId(value[value.index("@") + 1 : -1])
+    else:
+        return StringAccountId(value)
+
+
 class Authorization(Enum):
     """Defines various levels of authorization for account."""
     CITIZEN = 0
@@ -81,20 +144,24 @@ class RecurringTransfer(object):
 class Server(object):
     """A server manages a number of accounts that all have the same currency."""
 
-    def open_account(self, id, account_uuid=None):
+    def open_account(self, id: AccountId, account_uuid=None) -> Account:
         """Opens an empty account with a particular ID. Raises an exception if the account
            already exists. Otherwise returns the newly opened account."""
         raise NotImplementedError()
 
-    def get_account(self, id: str) -> Account:
+    def get_account(self, id: AccountId) -> Account:
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         raise NotImplementedError()
 
-    def get_account_id(self, account: Account) -> str:
+    def get_account_from_string(self, id: str) -> Account:
+        """Gets the account that matches a string ID. Raises an exception if there is no such account."""
+        return self.get_account(parse_account_id(id))
+
+    def get_account_id(self, account: Account) -> AccountId:
         """Gets an account's local ID. Raises an exception if the account is not registered here."""
         raise NotImplementedError()
 
-    def has_account(self, id: str) -> bool:
+    def has_account(self, id: AccountId) -> bool:
         """Tests if an account with a particular ID exists on this server."""
         raise NotImplementedError()
 
@@ -114,8 +181,8 @@ class Server(object):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
         raise NotImplementedError()
 
-    def add_public_key(self, account: Account, key: str):
-        """Associates a public key with an account. The key must be an ECC key as stored in a PEM file."""
+    def add_public_key(self, account: Account, key):
+        """Associates a public key with an account. The key must be an ECC key."""
         raise NotImplementedError()
 
     def get_recurring_transfer(self, id: str) -> RecurringTransfer:
@@ -170,7 +237,7 @@ class InMemoryServer(Server):
         self.gov_account.auth = Authorization.DEVELOPER
         self.recurring_transfers = {}
 
-    def open_account(self, id, account_uuid=None):
+    def open_account(self, id: AccountId, account_uuid=None):
         """Opens an empty account with a particular ID. Raises an exception if the account
            already exists. Otherwise returns the newly opened account."""
         if self.has_account(id):
@@ -181,11 +248,11 @@ class InMemoryServer(Server):
         self.inv_accounts[account] = id
         return account
 
-    def get_account(self, id):
+    def get_account(self, id: AccountId):
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         return self.accounts[id]
 
-    def get_account_id(self, account):
+    def get_account_id(self, account: Account):
         """Gets an account's local ID. Raises an exception if the account is not registered here."""
         return self.inv_accounts[account]
 
@@ -201,19 +268,19 @@ class InMemoryServer(Server):
         """Lists all accounts on this server."""
         return self.accounts.values()
 
-    def authorize(self, author, account, auth_level):
+    def authorize(self, author: Account, account: Account, auth_level: Authorization):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
         account.auth = auth_level
 
-    def add_public_key(self, account, key):
+    def add_public_key(self, account: Account, key):
         """Associates a public key with an account. The key must be an ECC key."""
         account.public_keys.append(key)
 
-    def print_money(self, author, account, amount):
+    def print_money(self, author: Account, account: Account, amount: int):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
         account.balance += amount
 
-    def transfer(self, author, source, destination, amount):
+    def transfer(self, author: Account, source: Account, destination: Account, amount: int):
         """Transfers a particular amount of money from one account on this server to another on
            the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
            This action must not complete successfully if the transfer cannot be performed."""
@@ -223,7 +290,7 @@ class InMemoryServer(Server):
         source.balance -= amount
         destination.balance += amount
 
-    def get_recurring_transfer(self, id):
+    def get_recurring_transfer(self, id: str):
         """Gets a recurring transfer based on its ID."""
         return self.recurring_transfers[id]
 
@@ -461,19 +528,19 @@ class LedgerServer(InMemoryServer):
                 super().open_account(elems[1], elems[2])
             elif cmd == 'transfer':
                 super().transfer(
-                    self.get_account(elems[1]),
-                    self.get_account(elems[2]),
-                    self.get_account(elems[3]),
+                    self.get_account_from_string(elems[1]),
+                    self.get_account_from_string(elems[2]),
+                    self.get_account_from_string(elems[3]),
                     int(elems[4]))
             elif cmd == 'authorize':
                 super().authorize(
-                    self.get_account(elems[1]),
-                    self.get_account(elems[2]),
+                    self.get_account_from_string(elems[1]),
+                    self.get_account_from_string(elems[2]),
                     Authorization[elems[3]])
             elif cmd == 'print-money':
                 super().print_money(
-                    self.get_account(elems[1]),
-                    self.get_account(elems[2]),
+                    self.get_account_from_string(elems[1]),
+                    self.get_account_from_string(elems[2]),
                     int(elems[3]))
             elif cmd == 'perform-recurring-transfer':
                 super().perform_recurring_transfer(
@@ -481,16 +548,16 @@ class LedgerServer(InMemoryServer):
                     int(elems[2]))
             elif cmd == 'create-recurring-transfer':
                 rec_transfer = super().create_recurring_transfer(
-                    self.get_account(elems[1]),
-                    self.get_account(elems[2]),
-                    self.get_account(elems[3]),
+                    self.get_account_from_string(elems[1]),
+                    self.get_account_from_string(elems[2]),
+                    self.get_account_from_string(elems[3]),
                     int(elems[4]),
                     int(elems[5]),
                     elems[6])
             elif cmd == 'add-public-key':
                 key = base64.b64decode(elems[2]).decode('utf-8')
                 super().add_public_key(
-                    self.get_account(elems[1]),
+                    self.get_account_from_string(elems[1]),
                     ECC.import_key(key))
             elif cmd == 'tick':
                 self.last_tick_timestamp = timestamp

@@ -5,7 +5,7 @@ import discord
 import json
 import time
 import asyncio
-from accounting import LedgerServer, Authorization
+from accounting import LedgerServer, Authorization, StringAccountId, DiscordAccountId, AccountId
 from commands import COMMANDS, list_commands_as_markdown, CommandException, assert_authorized, process_command
 
 def read_config():
@@ -32,7 +32,7 @@ def reply(message, body):
 
 def process_message(message, server):
     """Processes a message sent to the bot."""
-    reply(message, process_command(message.author.name, message.body, server))
+    reply(message, process_command(StringAccountId(message.author.name), message.body, server))
 
 def process_all_messages(reddit, server):
     """Processes all unread messages received by the bot."""
@@ -81,7 +81,7 @@ if __name__ == '__main__':
                 '<@%s> %s' % (
                     message.author.id,
                     process_command(
-                        str(message.author.id),
+                        DiscordAccountId(str(message.author.id)),
                         content[content.index('>') + 1:].lstrip(),
                         server)))
 
