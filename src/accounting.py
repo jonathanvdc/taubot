@@ -3,7 +3,9 @@ import time
 import os.path
 import random
 import base64
+from collections import defaultdict
 from enum import Enum
+from typing import List
 from Crypto.Hash import SHA3_256
 from Crypto.PublicKey import ECC
 
@@ -159,9 +161,13 @@ class Server(object):
         """Gets the account that matches a string ID. Raises an exception if there is no such account."""
         return self.get_account(parse_account_id(id))
 
-    def get_account_id(self, account: Account) -> AccountId:
-        """Gets an account's local ID. Raises an exception if the account is not registered here."""
+    def get_account_ids(self, account: Account) -> List[AccountId]:
+        """Gets an account's local IDs. Raises an exception if the account is not registered here."""
         raise NotImplementedError()
+
+    def get_account_id(self, account: Account) -> AccountId:
+        """Gets a representative local account ID. Raises an exception if the account is not registered here."""
+        return get_account_ids[0]
 
     def has_account(self, id: AccountId) -> bool:
         """Tests if an account with a particular ID exists on this server."""
@@ -234,7 +240,7 @@ class InMemoryServer(Server):
 
     def __init__(self):
         self.accounts = {}
-        self.inv_accounts = {}
+        self.inv_accounts = defaultdict(list)
         self.gov_account = InMemoryServer.open_account(self, "@government")
         self.gov_account.auth = Authorization.DEVELOPER
         self.recurring_transfers = {}
@@ -247,15 +253,15 @@ class InMemoryServer(Server):
 
         account = InMemoryAccount(account_uuid)
         self.accounts[id] = account
-        self.inv_accounts[account] = id
+        self.inv_accounts[account].append(id)
         return account
 
     def get_account(self, id: AccountId):
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         return self.accounts[id]
 
-    def get_account_id(self, account: Account):
-        """Gets an account's local ID. Raises an exception if the account is not registered here."""
+    def get_account_ids(self, account: Account) -> List[AccountId]:
+        """Gets an account's local IDs. Raises an exception if the account is not registered here."""
         return self.inv_accounts[account]
 
     def has_account(self, id):
@@ -671,9 +677,9 @@ class BackendServer(Server):
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         return BackendCitizenAccount(self.server_id, id)
 
-    def get_account_id(self, account):
-        """Gets an account's local ID. Raises an exception if the account is not registered here."""
-        return account.account_id if isinstance(account, BackendCitizenAccount) else "@government"
+    def get_account_ids(self, account):
+        """Gets an account's local IDs. Raises an exception if the account is not registered here."""
+        return [account.account_id if isinstance(account, BackendCitizenAccount) else "@government"]
 
     def has_account(self, id):
         """Tests if an account with a particular ID exists on this server."""

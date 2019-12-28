@@ -177,7 +177,7 @@ def process_authorization(author: AccountId, message: str, server: Server):
 def process_list_accounts(author: AccountId, message: str, server: Server):
     """Processes a message requesting a list of all accounts."""
     return '\n'.join(['| Account | Balance |', '| --- | --- |'] + [
-        '| %s | %s |' % (str(server.get_account_id(account)), account.get_balance())
+        '| %s | %s |' % (' / '.join(str(x) for x in server.get_account_ids(account)), account.get_balance())
         for account in server.list_accounts()
     ])
 
