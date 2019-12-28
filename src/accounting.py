@@ -8,97 +8,30 @@ from Crypto.Hash import SHA3_256
 from Crypto.PublicKey import ECC
 
 
-class Server(object):
-    """A server manages a number of accounts that all have the same currency."""
-
-    def open_account(self, id, account_uuid=None):
-        """Opens an empty account with a particular ID. Raises an exception if the account
-           already exists. Otherwise returns the newly opened account."""
-        raise NotImplementedError()
-
-    def get_account(self, id):
-        """Gets the account that matches an ID. Raises an exception if there is no such account."""
-        raise NotImplementedError()
-
-    def get_account_id(self, account):
-        """Gets an account's local ID. Raises an exception if the account is not registered here."""
-        raise NotImplementedError()
-
-    def has_account(self, id):
-        """Tests if an account with a particular ID exists on this server."""
-        raise NotImplementedError()
-
-    def get_government_account(self):
-        """Gets the main government account for this server."""
-        raise NotImplementedError()
-
-    def list_accounts(self):
-        """Lists all accounts on this server."""
-        raise NotImplementedError()
-
-    def authorize(self, author, account, auth_level):
-        """Makes `author` set `account`'s authorization level to `auth_level`."""
-        raise NotImplementedError()
-
-    def print_money(self, author, account, amount):
-        """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
-        raise NotImplementedError()
-
-    def add_public_key(self, account, key: str):
-        """Associates a public key with an account. The key must be an ECC key as stored in a PEM file."""
-        raise NotImplementedError()
-
-    def get_recurring_transfer(self, id):
-        """Gets a recurring transfer based on its ID."""
-        raise NotImplementedError()
-
-    def list_recurring_transfers(self):
-        """Produces a list of all recurring transfers."""
-        raise NotImplementedError()
-
-    def create_recurring_transfer(self, author, source, destination, total_amount, tick_count):
-        """Creates and registers a new recurring transfer, i.e., a transfer that is spread out over
-           many ticks. The transfer is authorized by `author` and consists of `total_amount` being
-           transferred from `source` to `destination` over the course of `tick_count` ticks. A tick
-           is a server-defined timespan."""
-        raise NotImplementedError()
-
-    def notify_tick_elapsed(self):
-        """Notifies the server that a tick has elapsed."""
-        raise NotImplementedError()
-
-    def transfer(self, author, source, destination, amount):
-        """Transfers a particular amount of money from one account on this server to another on
-           the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
-           This action must not complete successfully if the transfer cannot be performed."""
-        raise NotImplementedError()
-
-    def can_transfer(self, source, destination, amount):
-        """Tells if a particular amount of money can be transferred from one account on this
-           server to another. `destination` and `amount` are both `Account` objects."""
-        return amount > 0 and \
-            source.get_balance() - amount >= 0 and \
-            not source.is_frozen() and \
-            not destination.is_frozen()
+class Authorization(Enum):
+    """Defines various levels of authorization for account."""
+    CITIZEN = 0
+    ADMIN = 1
+    DEVELOPER = 2
 
 
 class Account(object):
     """An account. Every account has globally unique ID. Additionally, servers have one server-local ID
        per account on the server."""
 
-    def get_uuid(self):
+    def get_uuid(self) -> str:
         """Gets this account's unique identifier."""
         raise NotImplementedError()
 
-    def get_balance(self):
+    def get_balance(self) -> int:
         """Gets the balance on this account."""
         raise NotImplementedError()
 
-    def is_frozen(self):
+    def is_frozen(self) -> bool:
         """Tells if this account is frozen."""
         raise NotImplementedError()
 
-    def get_authorization(self):
+    def get_authorization(self) -> Authorization:
         """Gets this account's level of authorization."""
         raise NotImplementedError()
 
@@ -112,44 +45,117 @@ class Account(object):
 class RecurringTransfer(object):
     """A recurring transfer."""
 
-    def get_id(self):
+    def get_id(self) -> str:
         """Gets the ID for the transfer."""
         raise NotImplementedError()
 
-    def get_author(self):
+    def get_author(self) -> Account:
         """Gets the account that authorized the transfer."""
         raise NotImplementedError()
 
-    def get_source(self):
+    def get_source(self) -> Account:
         """Gets the account from which the money originates."""
         raise NotImplementedError()
 
-    def get_destination(self):
+    def get_destination(self) -> Account:
         """Gets the account to which the money must go."""
         raise NotImplementedError()
 
-    def get_tick_count(self):
+    def get_tick_count(self) -> int:
         """Gets the number of ticks over the course of which the transfer must complete."""
         raise NotImplementedError()
 
-    def get_total_amount(self):
+    def get_total_amount(self) -> int:
         """Gets the total amount to transfer."""
         raise NotImplementedError()
 
-    def get_remaining_amount(self):
+    def get_remaining_amount(self) -> int:
         """Gets the remaining amount to transfer."""
         raise NotImplementedError()
 
-    def get_transferred_amount(self):
+    def get_transferred_amount(self) -> int:
         """Gets the amount of money that has already been transferred."""
         return self.get_total_amount() - self.get_remaining_amount()
 
 
-class Authorization(Enum):
-    """Defines various levels of authorization for account."""
-    CITIZEN = 0
-    ADMIN = 1
-    DEVELOPER = 2
+class Server(object):
+    """A server manages a number of accounts that all have the same currency."""
+
+    def open_account(self, id, account_uuid=None):
+        """Opens an empty account with a particular ID. Raises an exception if the account
+           already exists. Otherwise returns the newly opened account."""
+        raise NotImplementedError()
+
+    def get_account(self, id: str) -> Account:
+        """Gets the account that matches an ID. Raises an exception if there is no such account."""
+        raise NotImplementedError()
+
+    def get_account_id(self, account: Account) -> str:
+        """Gets an account's local ID. Raises an exception if the account is not registered here."""
+        raise NotImplementedError()
+
+    def has_account(self, id: str) -> bool:
+        """Tests if an account with a particular ID exists on this server."""
+        raise NotImplementedError()
+
+    def get_government_account(self) -> Account:
+        """Gets the main government account for this server."""
+        raise NotImplementedError()
+
+    def list_accounts(self):
+        """Lists all accounts on this server."""
+        raise NotImplementedError()
+
+    def authorize(self, author: Account, account: Account, auth_level: Authorization):
+        """Makes `author` set `account`'s authorization level to `auth_level`."""
+        raise NotImplementedError()
+
+    def print_money(self, author: Account, account: Account, amount: int):
+        """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
+        raise NotImplementedError()
+
+    def add_public_key(self, account: Account, key: str):
+        """Associates a public key with an account. The key must be an ECC key as stored in a PEM file."""
+        raise NotImplementedError()
+
+    def get_recurring_transfer(self, id: str) -> RecurringTransfer:
+        """Gets a recurring transfer based on its ID."""
+        raise NotImplementedError()
+
+    def list_recurring_transfers(self):
+        """Produces a list of all recurring transfers."""
+        raise NotImplementedError()
+
+    def create_recurring_transfer(
+        self,
+        author: Account,
+        source: Account,
+        destination: Account,
+        total_amount: int,
+        tick_count: int) -> RecurringTransfer:
+        """Creates and registers a new recurring transfer, i.e., a transfer that is spread out over
+           many ticks. The transfer is authorized by `author` and consists of `total_amount` being
+           transferred from `source` to `destination` over the course of `tick_count` ticks. A tick
+           is a server-defined timespan."""
+        raise NotImplementedError()
+
+    def notify_tick_elapsed(self):
+        """Notifies the server that a tick has elapsed."""
+        raise NotImplementedError()
+
+    def transfer(self, author: Account, source: Account, destination: Account, amount: int):
+        """Transfers a particular amount of money from one account on this server to another on
+           the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
+           This action must not complete successfully if the transfer cannot be performed."""
+        raise NotImplementedError()
+
+    def can_transfer(self, source: Account, destination: Account, amount: int) -> bool:
+        """Tells if a particular amount of money can be transferred from one account on this
+           server to another. `destination` and `amount` are both `Account` objects."""
+        return amount > 0 and \
+            source.get_balance() - amount >= 0 and \
+            not source.is_frozen() and \
+            not destination.is_frozen()
 
 
 class InMemoryServer(Server):
