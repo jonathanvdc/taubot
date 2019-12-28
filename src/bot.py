@@ -63,7 +63,7 @@ async def reddit_loop(reddit, server):
 def split_into_chunks(message: bytes, max_length):
     """Splits a message into chunks. Prefers to split at newlines."""
     if len(message) < max_length:
-        return message
+        return [message]
 
     split_index = max_length
     newline_index = 0
