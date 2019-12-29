@@ -38,7 +38,7 @@ def take_length_prefixed(data: bytes):
     """Takes a byte string that starts with a length-prefixed byte string.
        Returns the contents of the length-prefixed byte string and the remaining
        bytes in `data`."""
-    length, = struct.unpack('<i', data)
+    length, = struct.unpack('<i', data[:4])
     return (data[4:4 + length], data[4 + length:])
 
 
