@@ -10,6 +10,9 @@ from accounting import LedgerServer, Authorization, RedditAccountId, DiscordAcco
 from commands import COMMANDS, list_commands_as_markdown, CommandException, assert_authorized, process_command
 from httpapi import RequestHandler
 
+# move this to config?
+prefix = "e!"
+
 def read_config():
     """Reads the configuration file."""
     with open('bot-config.json') as f:
@@ -30,7 +33,7 @@ def reply(message, body):
     if not title.lower().startswith('re:'):
         title = 're: %s' % message.subject
     message.mark_read()
-    return message.author.message(title, '%s\n\n%s' % ('\n'.join('> %s' % line for line in message.body.split('\n')), body))
+    return message.author.message(title, '%s\n\n%s\n\n%s' % ('\n'.join('> %s' % line for line in message.body.split('\n')), body, 'Provided by r/SimDemocracy'))
 
 def process_message(message, server):
     """Processes a message sent to the bot."""
@@ -42,7 +45,25 @@ def process_all_messages(reddit, server):
     for message in reddit.inbox.unread(limit=None):
         process_message(message, server)
 
-    # TODO: process comments where the bot is mentioned.
+def is_comment_replied_to(reddit, comment):
+    comment.refresh()
+    for reply in comment.replies:
+        if reply.author == reddit.user.me():
+            return True
+    return False
+
+def process_comment(comment, server):
+    """Processes a comment with the proper prefix."""
+    author = RedditAccountId(comment.author.name)
+    comment.reply(process_command(author, comment.body[len(prefix):], server))
+
+def process_recent_comments(reddit, server):
+    """Processes the last 100 comments."""
+    # TODO: have a list of subreddits and loop over it.
+    for comment in reddit.subreddit('simeconomy').comments(limit=100):
+        if not is_comment_replied_to(reddit, comment):
+            if comment.body.startswith(prefix):
+                process_comment(comment, server)
 
 async def reddit_loop(reddit, server):
     """The bot's main Reddit loop."""
@@ -52,6 +73,10 @@ async def reddit_loop(reddit, server):
     while True:
         # Process messages.
         process_all_messages(reddit, server)
+        
+        # Process comments.
+        # TODO: re-enable this once we get around rate-limiting.
+        # process_recent_comments(reddit, server)
 
         # Notify the server that one or more ticks have elapsed if necessary.
         time_diff = int(time.time() - server.last_tick_timestamp)
