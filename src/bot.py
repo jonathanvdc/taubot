@@ -31,7 +31,7 @@ def reply(message, body):
     if not title.lower().startswith('re:'):
         title = 're: %s' % message.subject
     message.mark_read()
-    return message.author.message(title, '%s\n\n%s' % ('\n'.join('> %s' % line for line in message.body.split('\n')), body))
+    return message.author.message(title, '%s\n\n%s\n\n%s' % ('\n'.join('> %s' % line for line in message.body.split('\n')), body, 'Provided by r/SimDemocracy'))
 
 def process_message(message, server):
     """Processes a message sent to the bot."""
