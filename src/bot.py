@@ -5,8 +5,10 @@ import discord
 import json
 import time
 import asyncio
+from aiohttp import web
 from accounting import LedgerServer, Authorization, RedditAccountId, DiscordAccountId, AccountId
 from commands import COMMANDS, list_commands_as_markdown, CommandException, assert_authorized, process_command
+from httpapi import RequestHandler
 
 def read_config():
     """Reads the configuration file."""
@@ -75,14 +77,13 @@ def split_into_chunks(message: bytes, max_length):
     if last_newline_index > 0:
         split_index = last_newline_index
 
-    return [message[:split_index], split_into_chunks(message[split_index:], max_length)]
+    return [message[:split_index]] + split_into_chunks(message[split_index:], max_length)
 
 if __name__ == '__main__':
     config = read_config()
     reddit = create_reddit(config)
     discord_client = discord.Client()
 
-    # This is our main message callback.
     @discord_client.event
     async def on_message(message):
         if message.author == discord_client.user:
@@ -106,5 +107,15 @@ if __name__ == '__main__':
                 await message.channel.send(chunk.decode('utf-8'))
 
     with LedgerServer('ledger.txt') as server:
-        asyncio.get_event_loop().create_task(reddit_loop(reddit, server))
+        loop = asyncio.get_event_loop()
+
+        # Run the Reddit bot.
+        loop.create_task(reddit_loop(reddit, server))
+
+        # Run the HTTP server.
+        app = web.Application()
+        app.router.add_get('/', RequestHandler(server, None).handle_request)
+        loop.create_task(web._run_app(app))
+
+        # Run the Discord bot.
         discord_client.run(config['discord_token'])
