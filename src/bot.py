@@ -8,6 +8,9 @@ import asyncio
 from accounting import LedgerServer, Authorization, RedditAccountId, DiscordAccountId, AccountId
 from commands import COMMANDS, list_commands_as_markdown, CommandException, assert_authorized, process_command
 
+# move this to config?
+prefix = "e!"
+
 def read_config():
     """Reads the configuration file."""
     with open('bot-config.json') as f:
@@ -40,7 +43,38 @@ def process_all_messages(reddit, server):
     for message in reddit.inbox.unread(limit=None):
         process_message(message, server)
 
-    # TODO: process comments where the bot is mentioned.
+def is_comment_replied_to(reddit, comment):
+    comment.refresh()
+    for reply in comment.replies:
+        if reply.author == reddit.user.me():
+            return True
+    return False
+
+def process_comment(comment, server):
+    """Processes a comment with the proper prefix."""
+    split_msg = comment.body[len(prefix):].split()
+    author = RedditAccountId(comment.author.name)
+    if len(split_msg) == 0:
+        return # maybe have the bot reply here?
+    elif split_msg[0] in COMMANDS:
+        try:
+            cmd = COMMANDS[split_msg[0]]
+            if len(cmd) >= 4 and cmd[3].value > Authorization.CITIZEN.value:
+                assert_authorized(author, server, cmd[3])
+
+            comment.reply(cmd[2](author, comment.body[len(prefix):], server))
+        except CommandException as e:
+            comment.reply(str(e))
+    else:
+        return # maybe have the bot reply here?
+
+def process_recent_comments(reddit, server):
+    """Processes the last 100 comments."""
+    # TODO: have a list of subreddits and loop over it.
+    for comment in reddit.subreddit('simeconomy').comments(limit=100):
+        if not is_comment_replied_to(reddit, comment):
+            if comment.body.startswith(prefix):
+                process_comment(comment, server)
 
 async def reddit_loop(reddit, server):
     """The bot's main Reddit loop."""
@@ -50,6 +84,9 @@ async def reddit_loop(reddit, server):
     while True:
         # Process messages.
         process_all_messages(reddit, server)
+        
+        # Process comments.
+        process_recent_comments(reddit, server)
 
         # Notify the server that one or more ticks have elapsed if necessary.
         time_diff = int(time.time() - server.last_tick_timestamp)
