@@ -111,11 +111,37 @@ class RequestClient(object):
 
     def create_request(self, request_command: str, request_data: bytes):
         """Creates an encrypted request from a command and the request data."""
-        return self.encrypt_request(request_command.encode('utf-8') + request_data)
+        return self.encrypt_request(length_prefix(request_command.encode('utf-8')) + request_data)
 
     def decrypt_response(self, sk_bytes, encrypted_response: bytes) -> bytes:
         """Decrypts an encrypted response message."""
         return decrypt(sk_bytes, encrypted_response)
+
+    async def get_response(self, request_command: str, request_data: bytes, send_request) -> bytes:
+        """Sends a command and reads the response."""
+        sk_bytes, msg = self.create_request(request_command, request_data)
+        enc_response = await send_request(msg)
+        response = self.decrypt_response(sk_bytes, enc_response)
+        status_code = StatusCode(struct.unpack('<i', response[:4])[0])
+        response_body = response[4:]
+        if status_code != StatusCode.SUCCESS:
+            raise ResponseErrorException(
+                status_code, response_body.decode('utf-8'))
+
+        return response_body
+
+    async def get_balance(self, send_request) -> bytes:
+        """Gets an account's balance."""
+        response = await self.get_response('balance', b'', send_request)
+        return struct.unpack('<l', response)[0]
+
+
+class ResponseErrorException(Exception):
+    """An exception that is thrown when a response cannot be obtained."""
+
+    def __init__(self, status_code, message):
+        super(message)
+        self.status_code = status_code
 
 
 class RequestProcessingException(Exception):
@@ -158,7 +184,7 @@ class RequestServer(object):
 
         # Decompose the request message into a command and data.
         request_command_bytes, request_data = take_length_prefixed(message)
-        request_command = request_command_bytes.decrypt('utf-8')
+        request_command = request_command_bytes.decode('utf-8')
 
         # Run the command on the data.
         if request_command not in self.request_handlers:
@@ -167,7 +193,7 @@ class RequestServer(object):
 
         status_code, response_body = self.request_handlers[request_command](
             request_data, account, self.server)
-        response = struct.pack('<i', status_code) + response_body
+        response = struct.pack('<i', status_code.value) + response_body
 
         # Encrypt the response.
         return self.encrypt_response(pk_bytes, response)
