@@ -70,5 +70,18 @@ class Cryptography(unittest.TestCase):
         _, _ = msg_server.decrypt_request(enc_msg)
         self.assertRaises(DecryptionException, lambda: msg_server.decrypt_request(enc_msg))
 
+    def test_signature_strictness(self):
+        """Ensures that signatures are checked."""
+
+        msg_client, msg_server = self.create_client_and_server()
+
+        # Use an unknown key to sign messages.
+        msg_client.client_private_key = ECC.generate(curve='P-256')
+
+        _, enc_msg = msg_client.encrypt_request(b'Hello there!')
+
+        self.assertRaises(DecryptionException, lambda: msg_server.decrypt_request(enc_msg))
+
+
 if __name__ == '__main__':
     unittest.main()
