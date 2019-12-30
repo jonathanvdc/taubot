@@ -31,7 +31,7 @@ def reply(message, body):
     if not title.lower().startswith('re:'):
         title = 're: %s' % message.subject
     message.mark_read()
-    return message.author.message(title, '%s\n\n%s' % ('\n'.join('> %s' % line for line in message.body.split('\n')), body))
+    return message.author.message(title, '%s\n\n%s\n\n%s' % ('\n'.join('> %s' % line for line in message.body.split('\n')), body, 'Provided by r/SimDemocracy'))
 
 def process_message(message, server):
     """Processes a message sent to the bot."""
@@ -52,21 +52,8 @@ def is_comment_replied_to(reddit, comment):
 
 def process_comment(comment, server):
     """Processes a comment with the proper prefix."""
-    split_msg = comment.body[len(prefix):].split()
     author = RedditAccountId(comment.author.name)
-    if len(split_msg) == 0:
-        return # maybe have the bot reply here?
-    elif split_msg[0] in COMMANDS:
-        try:
-            cmd = COMMANDS[split_msg[0]]
-            if len(cmd) >= 4 and cmd[3].value > Authorization.CITIZEN.value:
-                assert_authorized(author, server, cmd[3])
-
-            comment.reply(cmd[2](author, comment.body[len(prefix):], server))
-        except CommandException as e:
-            comment.reply(str(e))
-    else:
-        return # maybe have the bot reply here?
+    comment.reply(process_command(author, comment.body[len(prefix):], server))
 
 def process_recent_comments(reddit, server):
     """Processes the last 100 comments."""
@@ -86,7 +73,8 @@ async def reddit_loop(reddit, server):
         process_all_messages(reddit, server)
         
         # Process comments.
-        process_recent_comments(reddit, server)
+        # TODO: re-enable this once we get around rate-limiting.
+        # process_recent_comments(reddit, server)
 
         # Notify the server that one or more ticks have elapsed if necessary.
         time_diff = int(time.time() - server.last_tick_timestamp)
