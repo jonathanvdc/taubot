@@ -51,7 +51,7 @@ class Cryptography(unittest.TestCase):
         msg = b'Hello there!'
 
         sk_bytes, enc_msg = msg_client.encrypt_request(msg)
-        pk_bytes, dec_msg = msg_server.decrypt_request(enc_msg)
+        _, pk_bytes, dec_msg = msg_server.decrypt_request(enc_msg)
         self.assertEqual(dec_msg, msg)
 
         self.assertEqual(
@@ -67,7 +67,7 @@ class Cryptography(unittest.TestCase):
 
         _, enc_msg = msg_client.encrypt_request(b'Hello there!')
 
-        _, _ = msg_server.decrypt_request(enc_msg)
+        _, _, _ = msg_server.decrypt_request(enc_msg)
         self.assertRaises(DecryptionException, lambda: msg_server.decrypt_request(enc_msg))
 
     def test_signature_strictness(self):

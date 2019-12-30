@@ -16,12 +16,13 @@
 
 import random
 import struct
+from enum import Enum
 from ecies.utils import generate_key
 from ecies import encrypt, decrypt
 from Crypto.Signature import DSS
 from Crypto.Hash import SHA3_512
 from aiohttp import web
-from accounting import parse_account_id, AccountId, Server
+from accounting import parse_account_id, Account, AccountId, Server
 
 
 def generate_nonce(length):
@@ -59,11 +60,11 @@ def sign_message(message: bytes, private_key) -> bytes:
 
 
 def compose_signed_plaintext_request(
-    nonce: bytes,
-    account_id: AccountId,
-    response_pk_bytes: bytes,
-    request_data: bytes,
-    private_key) -> bytes:
+        nonce: bytes,
+        account_id: AccountId,
+        response_pk_bytes: bytes,
+        request_data: bytes,
+        private_key) -> bytes:
     """Composes an signed plaintext request."""
     # Compose the message.
     message = compose_unsigned_plaintext_request(
@@ -108,9 +109,18 @@ class RequestClient(object):
         # Encrypt the message.
         return (sk_bytes, encrypt(self.server_public_key, message))
 
+    def create_request(self, request_command: str, request_data: bytes):
+        """Creates an encrypted request from a command and the request data."""
+        return self.encrypt_request(request_command.encode('utf-8') + request_data)
+
     def decrypt_response(self, sk_bytes, encrypted_response: bytes) -> bytes:
         """Decrypts an encrypted response message."""
         return decrypt(sk_bytes, encrypted_response)
+
+
+class RequestProcessingException(Exception):
+    """An exception that is thrown when a request cannot be processed."""
+    pass
 
 
 class DecryptionException(Exception):
@@ -118,22 +128,52 @@ class DecryptionException(Exception):
     pass
 
 
+class StatusCode(Enum):
+    """An enumeration of possible response statuses."""
+    SUCCESS = 0
+
+
+def _handle_balance_request(data: bytes, account: Account, server: Server):
+    """Handles an account balance request."""
+    return (StatusCode.SUCCESS, struct.pack('<l', account.get_balance()))
+
+
+# The server's default request handlers. A request handler takes request data, an account
+# and a server as arguments and produces a (status code, response data) pair as return value.
+DEFAULT_REQUEST_HANDLERS = {
+    'balance': _handle_balance_request
+}
+
+
 class RequestServer(object):
     """Handles incoming requests."""
 
-    def __init__(self, server: Server, private_key, max_nonce_count=10000):
+    def __init__(self, server: Server, private_key, max_nonce_count=10000, request_handlers=None):
+        if request_handlers is None:
+            request_handlers = DEFAULT_REQUEST_HANDLERS
+
         self.used_nonces = set()
         self.server = server
         self.max_nonce_count = max_nonce_count
         self.private_key = private_key
+        self.request_handlers = request_handlers
 
     async def handle_request(self, request):
         """Handles a request."""
         # Decrypt the request.
-        pk_bytes, message = self.decrypt_request(await request.read())
+        account, pk_bytes, message = self.decrypt_request(await request.read())
 
-        # TODO: implement actual request handling.
-        response = message
+        # Decompose the request message into a command and data.
+        request_command_bytes, request_data = take_length_prefixed(message)
+        request_command = request_command_bytes.decrypt('utf-8')
+
+        if request_command not in self.request_handlers:
+            raise RequestProcessingException(
+                'Unknown request command %r.' % request_command)
+
+        status_code, response_body = self.request_handlers[request_command](
+            request_data, account, self.server)
+        response = struct.pack('<i', status_code) + response_body
 
         # Encrypt the response.
         return web.Response(body=self.encrypt_response(pk_bytes, response))
@@ -159,8 +199,11 @@ class RequestServer(object):
 
         # Read the account name.
         account_id_bytes, data = take_length_prefixed(data)
-        account = self.server.get_account_from_string(
-            account_id_bytes.decode('utf-8'))
+        account_id = parse_account_id(account_id_bytes.decode('utf-8'))
+        if not self.server.has_account(account_id):
+            raise DecryptionException('Account %r does not exist.', account_id)
+
+        account = self.server.get_account(account_id)
 
         # Read all the other data.
         pk_bytes, data = take_length_prefixed(data)
@@ -184,4 +227,4 @@ class RequestServer(object):
         if not any_verified:
             raise DecryptionException('Invalid signature.')
 
-        return (pk_bytes, message)
+        return (account, pk_bytes, message)
