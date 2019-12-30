@@ -8,7 +8,7 @@ import asyncio
 from aiohttp import web
 from accounting import LedgerServer, Authorization, RedditAccountId, DiscordAccountId, AccountId
 from commands import COMMANDS, list_commands_as_markdown, CommandException, assert_authorized, process_command
-from httpapi import RequestHandler
+from httpapi import RequestServer
 
 # move this to config?
 prefix = "e!"
@@ -139,7 +139,7 @@ if __name__ == '__main__':
 
         # Run the HTTP server.
         app = web.Application()
-        app.router.add_get('/', RequestHandler(server, None).handle_request)
+        app.router.add_get('/', RequestServer(server, None).handle_request)
         loop.create_task(web._run_app(app))
 
         # Run the Discord bot.

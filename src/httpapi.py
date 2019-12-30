@@ -81,7 +81,7 @@ class RequestClient(object):
         return decrypt(sk_bytes, encrypted_response)
 
 
-class RequestHandler(object):
+class RequestServer(object):
     """Handles incoming requests."""
 
     def __init__(self, server: Server, private_key, max_nonce_count=10000):
@@ -107,8 +107,7 @@ class RequestHandler(object):
 
     def decrypt_request(self, encrypted_data: bytes):
         """Decrypts and verifies an incoming encrypted request message."""
-        data = decrypt(self.private_key, encrypted_data)
-        data_hash = SHA3_512.new(data)
+        plaintext = data = decrypt(self.private_key, encrypted_data)
 
         # Process the nonce.
         nonce = data[:32]
@@ -123,11 +122,13 @@ class RequestHandler(object):
 
         # Read the account name.
         account_id_bytes, data = take_length_prefixed(data)
-        account = self.server.get_account_from_string(str(account_id_bytes))
+        account = self.server.get_account_from_string(account_id_bytes.decode('utf-8'))
 
         # Read all the other data.
         pk_bytes, data = take_length_prefixed(data)
         message, data = take_length_prefixed(data)
+
+        data_hash = SHA3_512.new(plaintext[:-len(data)])
 
         # Check the digital signature.
         any_verified = False
