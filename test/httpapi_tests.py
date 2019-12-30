@@ -9,9 +9,9 @@ from os import path
 sys.path.append(path.join(path.dirname(path.dirname(path.abspath(__file__))), 'src'))
 
 from accounting import RedditAccountId, InMemoryServer
-from httpapi import length_prefix, take_length_prefixed, RequestClient, RequestServer
+from httpapi import length_prefix, take_length_prefixed, RequestClient, RequestServer, compose_signed_plaintext_request, DecryptionException
 
-class IOHelpers(unittest.TestCase):
+class Cryptography(unittest.TestCase):
 
     def test_length_prefix(self):
         self.assertEqual(take_length_prefixed(length_prefix(b'hello'))[0], b'hello')
@@ -20,9 +20,8 @@ class IOHelpers(unittest.TestCase):
         self.assertEqual(hello, b'hello')
         self.assertEqual(hi, b'hi')
 
-    def test_roundtrip(self):
-        """Ensures that the encryption/decryption algorithm can round-trip a message request and response."""
-
+    def create_client_and_server(self):
+        """Creates a client and a server."""
         # Set up a server containing exactly one account.
         server = InMemoryServer()
         account_id = RedditAccountId('general-kenobi')
@@ -40,6 +39,13 @@ class IOHelpers(unittest.TestCase):
 
         # Create a message server.
         msg_server = RequestServer(server, server_key.secret)
+        
+        return (msg_client, msg_server)
+
+    def test_roundtrip(self):
+        """Ensures that the encryption/decryption algorithm can round-trip a message request and response."""
+
+        msg_client, msg_server = self.create_client_and_server()
 
         # Round-trip a message.
         msg = b'Hello there!'
@@ -53,6 +59,16 @@ class IOHelpers(unittest.TestCase):
                 sk_bytes,
                 msg_server.encrypt_response(pk_bytes, msg)),
             msg)
+
+    def test_no_replay(self):
+        """Ensures that message replay throws an exception."""
+
+        msg_client, msg_server = self.create_client_and_server()
+
+        _, enc_msg = msg_client.encrypt_request(b'Hello there!')
+
+        _, _ = msg_server.decrypt_request(enc_msg)
+        self.assertRaises(DecryptionException, lambda: msg_server.decrypt_request(enc_msg))
 
 if __name__ == '__main__':
     unittest.main()

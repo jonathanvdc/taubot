@@ -42,6 +42,42 @@ def take_length_prefixed(data: bytes):
     return (data[4:4 + length], data[4 + length:])
 
 
+def compose_unsigned_plaintext_request(nonce: bytes, account_id: AccountId, response_pk_bytes: bytes, request_data: bytes):
+    """Composes an unsigned plaintext request."""
+    return b''.join([
+        nonce,
+        length_prefix(str(account_id).encode('utf-8')),
+        length_prefix(response_pk_bytes),
+        length_prefix(request_data)
+    ])
+
+
+def sign_message(message: bytes, private_key) -> bytes:
+    """Signs a message, producing a digital signature."""
+    signer = DSS.new(private_key, 'fips-186-3')
+    return signer.sign(SHA3_512.new(message))
+
+
+def compose_signed_plaintext_request(
+    nonce: bytes,
+    account_id: AccountId,
+    response_pk_bytes: bytes,
+    request_data: bytes,
+    private_key) -> bytes:
+    """Composes an signed plaintext request."""
+    # Compose the message.
+    message = compose_unsigned_plaintext_request(
+        nonce,
+        account_id,
+        response_pk_bytes,
+        request_data)
+
+    # Sign the message.
+    message += sign_message(message, private_key)
+
+    return message
+
+
 class RequestClient(object):
     """Creates outgoing requests and accepts responses."""
 
@@ -55,23 +91,19 @@ class RequestClient(object):
 
         # First create the nonce.
         nonce = generate_nonce(32)
-        message = nonce
 
-        # Insert the account ID.
-        message += length_prefix(str(self.account_id).encode('utf-8'))
-
-        # Then add in the reply key pair.
+        # Generate a response key pair.
         reply_key = generate_key()
         sk_bytes = reply_key.secret
         pk_bytes = reply_key.public_key.format(True)
-        message += length_prefix(pk_bytes)
 
-        # Insert the actual request here.
-        message += length_prefix(request_data)
-
-        # Sign the message.
-        signer = DSS.new(self.client_private_key, 'fips-186-3')
-        message += signer.sign(SHA3_512.new(message))
+        # Compose the message.
+        message = compose_signed_plaintext_request(
+            nonce,
+            self.account_id,
+            pk_bytes,
+            request_data,
+            self.client_private_key)
 
         # Encrypt the message.
         return (sk_bytes, encrypt(self.server_public_key, message))
@@ -79,6 +111,11 @@ class RequestClient(object):
     def decrypt_response(self, sk_bytes, encrypted_response: bytes) -> bytes:
         """Decrypts an encrypted response message."""
         return decrypt(sk_bytes, encrypted_response)
+
+
+class DecryptionException(Exception):
+    """An exception that is thrown when decryption fails."""
+    pass
 
 
 class RequestServer(object):
@@ -113,7 +150,7 @@ class RequestServer(object):
         nonce = data[:32]
         data = data[32:]
         if nonce in self.used_nonces:
-            raise Exception('Nonce is reused.')
+            raise DecryptionException('Nonce %r is reused.' % nonce)
 
         if len(self.used_nonces) >= self.max_nonce_count:
             self.used_nonces.remove(random.choice(self.used_nonces))
@@ -122,7 +159,8 @@ class RequestServer(object):
 
         # Read the account name.
         account_id_bytes, data = take_length_prefixed(data)
-        account = self.server.get_account_from_string(account_id_bytes.decode('utf-8'))
+        account = self.server.get_account_from_string(
+            account_id_bytes.decode('utf-8'))
 
         # Read all the other data.
         pk_bytes, data = take_length_prefixed(data)
@@ -144,6 +182,6 @@ class RequestServer(object):
                 break
 
         if not any_verified:
-            raise Exception('Invalid signature.')
+            raise DecryptionException('Invalid signature.')
 
         return (pk_bytes, message)
