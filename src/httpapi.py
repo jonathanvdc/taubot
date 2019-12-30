@@ -133,18 +133,6 @@ class StatusCode(Enum):
     SUCCESS = 0
 
 
-def _handle_balance_request(data: bytes, account: Account, server: Server):
-    """Handles an account balance request."""
-    return (StatusCode.SUCCESS, struct.pack('<l', account.get_balance()))
-
-
-# The server's default request handlers. A request handler takes request data, an account
-# and a server as arguments and produces a (status code, response data) pair as return value.
-DEFAULT_REQUEST_HANDLERS = {
-    'balance': _handle_balance_request
-}
-
-
 class RequestServer(object):
     """Handles incoming requests."""
 
@@ -159,14 +147,20 @@ class RequestServer(object):
         self.request_handlers = request_handlers
 
     async def handle_request(self, request):
-        """Handles a request."""
+        """Handles an HTTP request."""
         # Decrypt the request.
-        account, pk_bytes, message = self.decrypt_request(await request.read())
+        return web.Response(body=self.handle_request_body(await request.read()))
+
+    def handle_request_body(self, request_body: bytes) -> bytes:
+        """Handles an HTTP request body."""
+        # Decrypt the request.
+        account, pk_bytes, message = self.decrypt_request(request_body)
 
         # Decompose the request message into a command and data.
         request_command_bytes, request_data = take_length_prefixed(message)
         request_command = request_command_bytes.decrypt('utf-8')
 
+        # Run the command on the data.
         if request_command not in self.request_handlers:
             raise RequestProcessingException(
                 'Unknown request command %r.' % request_command)
@@ -176,7 +170,7 @@ class RequestServer(object):
         response = struct.pack('<i', status_code) + response_body
 
         # Encrypt the response.
-        return web.Response(body=self.encrypt_response(pk_bytes, response))
+        return self.encrypt_response(pk_bytes, response)
 
     def encrypt_response(self, pk_bytes, response: bytes) -> bytes:
         """Encrypts an outgoing message."""
@@ -228,3 +222,15 @@ class RequestServer(object):
             raise DecryptionException('Invalid signature.')
 
         return (account, pk_bytes, message)
+
+
+def _handle_balance_request(data: bytes, account: Account, server: Server):
+    """Handles an account balance request."""
+    return (StatusCode.SUCCESS, struct.pack('<l', account.get_balance()))
+
+
+# The server's default request handlers. A request handler takes request data, an account
+# and a server as arguments and produces a (status code, response data) pair as return value.
+DEFAULT_REQUEST_HANDLERS = {
+    'balance': _handle_balance_request
+}
