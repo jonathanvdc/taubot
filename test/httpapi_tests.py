@@ -20,8 +20,8 @@ class IOHelpers(unittest.TestCase):
         self.assertEqual(hello, b'hello')
         self.assertEqual(hi, b'hi')
 
-    def test_roundtrip_request(self):
-        """Ensures that the encryption/decryption algorithm can round-trip a message request."""
+    def test_roundtrip(self):
+        """Ensures that the encryption/decryption algorithm can round-trip a message request and response."""
 
         # Set up a server containing exactly one account.
         server = InMemoryServer()
@@ -44,9 +44,15 @@ class IOHelpers(unittest.TestCase):
         # Round-trip a message.
         msg = b'Hello there!'
 
-        _, enc_msg = msg_client.encrypt_request(msg)
-        _, dec_msg = msg_server.decrypt_request(enc_msg)
+        sk_bytes, enc_msg = msg_client.encrypt_request(msg)
+        pk_bytes, dec_msg = msg_server.decrypt_request(enc_msg)
         self.assertEqual(dec_msg, msg)
+
+        self.assertEqual(
+            msg_client.decrypt_response(
+                sk_bytes,
+                msg_server.encrypt_response(pk_bytes, msg)),
+            msg)
 
 if __name__ == '__main__':
     unittest.main()
