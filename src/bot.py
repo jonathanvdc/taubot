@@ -55,27 +55,37 @@ def process_comment(comment, server):
     author = RedditAccountId(comment.author.name)
     comment.reply(process_command(author, comment.body[len(prefix):], server))
 
-def process_recent_comments(reddit, server):
-    """Processes the last 100 comments."""
-    # TODO: have a list of subreddits and loop over it.
-    for comment in reddit.subreddit('simeconomy').comments(limit=100):
-        if not is_comment_replied_to(reddit, comment):
-            if comment.body.startswith(prefix):
-                process_comment(comment, server)
-
-async def reddit_loop(reddit, server):
-    """The bot's main Reddit loop."""
+async def message_loop(reddit, server):
+    """The bot's main Reddit message loop."""
     # Let's make a tick twice every day.
     tick_duration = 12 * 60 * 60
 
     while True:
         # Process messages.
         process_all_messages(reddit, server)
-        
-        # Process comments.
-        # TODO: re-enable this once we get around rate-limiting.
-        # process_recent_comments(reddit, server)
 
+        # Notify the server that one or more ticks have elapsed if necessary.
+        time_diff = int(time.time() - server.last_tick_timestamp)
+        if time_diff > tick_duration:
+            for i in range(time_diff // tick_duration):
+                server.notify_tick_elapsed()
+
+        # Sleep for five seconds.
+        await asyncio.sleep(5)
+
+async def comment_loop(reddit, server):
+    """The bot's main Reddit comment loop."""
+    # Let's make a tick twice every day.
+    tick_duration = 12 * 60 * 60
+    
+    # TODO: handle multiple subreddits.
+    for comment in reddit.subreddit('simeconomy').stream.comments(pause_after=0):
+        # Prcoess next comment if necessary.
+        if not (comment is None or is_comment_replied_to(reddit, comment)):
+            if comment.body.startswith(prefix):
+                process_comment(comment, server)
+                await asyncio.sleep(10 * 60)
+        
         # Notify the server that one or more ticks have elapsed if necessary.
         time_diff = int(time.time() - server.last_tick_timestamp)
         if time_diff > tick_duration:
@@ -131,5 +141,6 @@ if __name__ == '__main__':
                 await message.channel.send(chunk.decode('utf-8'))
 
     with LedgerServer('ledger.txt') as server:
-        asyncio.get_event_loop().create_task(reddit_loop(reddit, server))
+        asyncio.get_event_loop().create_task(message_loop(reddit, server))
+        asyncio.get_event_loop().create_task(comment_loop(reddit, server))
         discord_client.run(config['discord_token'])
