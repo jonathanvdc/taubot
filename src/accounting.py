@@ -594,7 +594,7 @@ class LedgerServer(InMemoryServer):
         t = time.time()
         elems = [str(t)] + list(map(str, args))
         salt, new_hash = generate_salt_and_hash(self.last_hash, elems, self.leading_zero_count)
-        with open(ledger_path, 'a') as f:
+        with open(self.ledger_path, 'a') as f:
             f.writelines(' '.join([new_hash.hexdigest(), salt] + elems) + '\n')
             f.close()
         self.last_hash = new_hash.digest()
