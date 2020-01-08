@@ -192,6 +192,10 @@ class Server(object):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
         raise NotImplementedError()
 
+    def set_frozen(self, author: Account, account: Account, is_frozen: bool):
+        """Freezes or unfreezes `account` on the authority of `author`."""
+        raise NotImplementedError()
+
     def print_money(self, author: Account, account: Account, amount: int):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
         raise NotImplementedError()
@@ -291,6 +295,10 @@ class InMemoryServer(Server):
     def authorize(self, author: Account, account: Account, auth_level: Authorization):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
         account.auth = auth_level
+
+    def set_frozen(self, author: Account, account: Account, is_frozen: bool):
+        """Freezes or unfreezes `account` on the authority of `author`."""
+        account.frozen = is_frozen
 
     def add_public_key(self, account: Account, key):
         """Associates a public key with an account. The key must be an ECC key."""
@@ -557,6 +565,11 @@ class LedgerServer(InMemoryServer):
                     self.get_account_from_string(elems[1]),
                     self.get_account_from_string(elems[2]),
                     Authorization[elems[3]])
+            elif cmd == 'set-frozen':
+                super().set_frozen(
+                    self.get_account_from_string(elems[1]),
+                    self.get_account_from_string(elems[2]),
+                    elems[3] == 'True')
             elif cmd == 'print-money':
                 super().print_money(
                     self.get_account_from_string(elems[1]),
@@ -621,6 +634,15 @@ class LedgerServer(InMemoryServer):
             self.get_account_id(account),
             auth_level.name)
         return result
+
+    def set_frozen(self, author: Account, account: Account, is_frozen: bool):
+        """Freezes or unfreezes `account` on the authority of `author`."""
+        super().set_frozen(author, account, is_frozen)
+        self._ledger_write(
+            'set-frozen',
+            self.get_account_id(author),
+            self.get_account_id(account),
+            is_frozen)
 
     def add_public_key(self, account, key):
         """Associates a public key with an account. The key must be an ECC key."""

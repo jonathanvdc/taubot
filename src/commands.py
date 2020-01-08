@@ -88,21 +88,41 @@ def process_open_account(author: AccountId, message: str, server: Server):
     server.open_account(author)
     return 'Hi there %s. Your account has been opened successfully. Thank you for your business.' % author.readable()
 
-def process_admin_open_account(author: AccountId, message: str, server: Server):
-    """Processes a message that tries to open a new account."""
-    assert_authorized(author, server, Authorization.ADMIN)
+def parse_account_name_command(message: str) -> str:
+    """Parses a command that has a single parameter: an account name."""
     body = message.split()
     if len(body) != 2:
         raise CommandException(
-            'Incorrectly formatted command; expected `admin-open ACCOUNT_NAME`, '
-            'where `ACCOUNT_NAME` is the name of the account to create.')
+            'Incorrectly formatted command; expected `%s ACCOUNT_NAME`.' % body[0])
+    return body[1]
 
-    account_name = parse_account_id(body[1])
+def process_admin_open_account(author: AccountId, message: str, server: Server):
+    """Processes a message that tries to open a new account."""
+    assert_authorized(author, server, Authorization.ADMIN)
+    account_name = parse_account_name_command(message)
     if server.has_account(account_name):
         raise CommandException('Account `%s` already exists.' % account_name)
 
     server.open_account(account_name)
     return 'Account `%s` has been opened successfully.' % account_name
+
+def process_admin_freeze(author: AccountId, message: str, server: Server):
+    """Processes a message that freezes an account."""
+    author_account = assert_authorized(author, server, Authorization.ADMIN)
+    account_name = parse_account_name_command(message)
+    account = assert_is_account(account_name, server)
+
+    server.set_frozen(author_account, account, True)
+    return 'Account `%s` was frozen successfully.' % account_name
+
+def process_admin_unfreeze(author: AccountId, message: str, server: Server):
+    """Processes a message that unfreezes an account."""
+    author_account = assert_authorized(author, server, Authorization.ADMIN)
+    account_name = parse_account_name_command(message)
+    account = assert_is_account(account_name, server)
+
+    server.set_frozen(author_account, account, False)
+    return 'Account `%s` was unfrozen successfully.' % account_name
 
 def process_balance(author: AccountId, message: str, server: Server):
     """Processes a message requesting the balance on an account."""
@@ -477,5 +497,15 @@ COMMANDS = {
         'opens a new account with name `ACCOUNT_NAME`. '
             'If an existing user has `ACCOUNT_NAME`, then the newly created account will become that user\'s account.',
         process_admin_open_account,
+        Authorization.ADMIN),
+    'admin-freeze': (
+        'admin-freeze ACCOUNT_NAME',
+        'freezes the account with name `ACCOUNT_NAME`.',
+        process_admin_freeze,
+        Authorization.ADMIN),
+    'admin-unfreeze': (
+        'admin-unfreeze ACCOUNT_NAME',
+        'unfreezes the account with name `ACCOUNT_NAME`.',
+        process_admin_unfreeze,
         Authorization.ADMIN)
 }
