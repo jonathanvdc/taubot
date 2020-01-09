@@ -37,7 +37,7 @@ class ServerTests(unittest.TestCase):
 class CommandTests(unittest.TestCase):
 
     def test_admin_open(self):
-        """Tests that an account can be opened."""
+        """Tests that an account can be opened by an admin."""
         for server in create_test_servers():
             admin_id = RedditAccountId('admin')
             admin = server.open_account(admin_id)
@@ -48,6 +48,15 @@ class CommandTests(unittest.TestCase):
             account = server.get_account_from_string('general-kenobi')
             self.assertEqual(account.get_balance(), 0)
 
+    def test_user_open(self):
+        """Tests that a user can open an account."""
+        for server in create_test_servers():
+            account_id = RedditAccountId('general-kenobi')
+            self.assertFalse(server.has_account(account_id))
+            run_command_stream(server, (account_id, 'open'))
+            self.assertTrue(server.has_account(account_id))
+            account = server.get_account(account_id)
+            self.assertEqual(account.get_balance(), 0)
 
     def test_freeze(self):
         """Tests that accounts can be frozen and unfrozen."""
