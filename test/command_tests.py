@@ -74,6 +74,22 @@ class CommandTests(unittest.TestCase):
             self.assertEqual(account.get_balance(), 0)
             close_server(server)
 
+    def test_print_money(self):
+        """Tests that money printing works."""
+        for server in create_test_servers():
+            admin_id = RedditAccountId('admin')
+            admin = server.open_account(admin_id)
+            server.authorize(admin, admin, Authorization.ADMIN)
+
+            self.assertEqual(admin.get_balance(), 0)
+            run_command_stream(
+                server,
+                (admin_id, 'print-money 20 admin'))
+
+            self.assertEqual(admin.get_balance(), 20)
+
+            close_server(server)
+
     def test_freeze(self):
         """Tests that accounts can be frozen and unfrozen."""
         for server in create_test_servers():
