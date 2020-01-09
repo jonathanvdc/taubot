@@ -17,8 +17,10 @@ def run_all(elements, action):
 
 def run_command_stream(server, *commands):
     """Runs a sequence of commands (formatted as author, command pairs) on a server."""
+    responses = []
     for (author, cmd) in commands:
-        process_command(author, cmd, server)
+        responses.append(process_command(author, cmd, server))
+    return responses
 
 def create_test_servers() -> List[Server]:
     """Creates a list of test servers."""
@@ -64,13 +66,25 @@ class CommandTests(unittest.TestCase):
             admin_id = RedditAccountId('admin')
             admin = server.open_account(admin_id)
             server.authorize(admin, admin, Authorization.ADMIN)
-            run_command_stream(server, (admin_id, 'admin-open general-kenobi'))
-            account = server.get_account_from_string('general-kenobi')
+            run_command_stream(
+                server,
+                (admin_id, 'admin-open general-kenobi'),
+                (admin_id, 'print-money 20 general-kenobi'),
+                (admin_id, 'print-money 20 admin'))
+            account_id = RedditAccountId('general-kenobi')
+            account = server.get_account(account_id)
             self.assertFalse(account.is_frozen())
+            self.assertTrue(server.can_transfer(account, admin, 20))
+            self.assertTrue(server.can_transfer(admin, account, 20))
             run_command_stream(server, (admin_id, 'admin-freeze general-kenobi'))
             self.assertTrue(account.is_frozen())
+            self.assertFalse(server.can_transfer(account, admin, 20))
+            self.assertFalse(server.can_transfer(admin, account, 20))
+            run_command_stream(server, (account_id, 'transfer 20 admin'))
             run_command_stream(server, (admin_id, 'admin-unfreeze general-kenobi'))
             self.assertFalse(account.is_frozen())
+            self.assertTrue(server.can_transfer(account, admin, 20))
+            self.assertTrue(server.can_transfer(admin, account, 20))
 
 if __name__ == '__main__':
     unittest.main()
