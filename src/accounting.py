@@ -523,6 +523,10 @@ class LedgerServer(InMemoryServer):
         return self
 
     def __exit__(self, type, value, traceback):
+        self.close()
+
+    def close(self):
+        """Closes the server's underlying ledger file."""
         self.ledger_file.close()
 
     def _read_ledger(self, ledger_path):

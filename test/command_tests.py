@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 import sys
-from os import path
+from os import path, remove
 sys.path.append(path.join(path.dirname(
     path.dirname(path.abspath(__file__))), 'src'))
 
 from commands import process_command
-from accounting import RedditAccountId, InMemoryServer, Server, Authorization
+from accounting import RedditAccountId, InMemoryServer, Server, Authorization, LedgerServer
 from typing import List
 import unittest
 
@@ -24,7 +24,18 @@ def run_command_stream(server, *commands):
 
 def create_test_servers() -> List[Server]:
     """Creates a list of test servers."""
-    return [InMemoryServer()]
+    path = 'test-ledger.txt'
+    try:
+        remove(path)
+    except:
+        pass
+
+    return [InMemoryServer(), LedgerServer(path)]
+
+def close_server(server: Server):
+    """Closes a server."""
+    if isinstance(server, LedgerServer):
+        server.close()
 
 class ServerTests(unittest.TestCase):
     """Tests that verify that the implementation of a Server and related data types are correct."""
@@ -35,6 +46,7 @@ class ServerTests(unittest.TestCase):
             self.assertFalse(server.has_account(RedditAccountId('taubot')))
             account = server.open_account(RedditAccountId('taubot'))
             self.assertEqual(account.get_balance(), 0)
+            close_server(server)
 
 class CommandTests(unittest.TestCase):
 
@@ -49,6 +61,7 @@ class CommandTests(unittest.TestCase):
             self.assertTrue(server.has_account(RedditAccountId('general-kenobi')))
             account = server.get_account_from_string('general-kenobi')
             self.assertEqual(account.get_balance(), 0)
+            close_server(server)
 
     def test_user_open(self):
         """Tests that a user can open an account."""
@@ -59,6 +72,7 @@ class CommandTests(unittest.TestCase):
             self.assertTrue(server.has_account(account_id))
             account = server.get_account(account_id)
             self.assertEqual(account.get_balance(), 0)
+            close_server(server)
 
     def test_freeze(self):
         """Tests that accounts can be frozen and unfrozen."""
@@ -85,6 +99,7 @@ class CommandTests(unittest.TestCase):
             self.assertFalse(account.is_frozen())
             self.assertTrue(server.can_transfer(account, admin, 20))
             self.assertTrue(server.can_transfer(admin, account, 20))
+            close_server(server)
 
 if __name__ == '__main__':
     unittest.main()
