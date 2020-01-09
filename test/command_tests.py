@@ -37,6 +37,10 @@ def create_test_servers() -> Sequence[Server]:
     with LedgerServer(ledger_path) as ledger_server:
         yield ledger_server
 
+    # Load the ledger to ensure that the created ledger remains readable.
+    with LedgerServer(ledger_path) as ledger_server:
+        pass
+
 class ServerTests(unittest.TestCase):
     """Tests that verify that the implementation of a Server and related data types are correct."""
 
