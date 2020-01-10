@@ -212,5 +212,12 @@ class CommandTests(unittest.TestCase):
             # Ensure that the accounts weren't linked.
             self.assertNotIn(other_id, server.get_account_ids(admin))
 
+    def test_name_command(self):
+        """Tests that the name command returns an account's name."""
+        for server in create_test_servers():
+            account_id = RedditAccountId('general-kenobi')
+            response = run_command_stream(server, (account_id, 'name'))[0]
+            self.assertIn(str(account_id), response)
+
 if __name__ == '__main__':
     unittest.main()
