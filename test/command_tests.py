@@ -157,6 +157,33 @@ class CommandTests(unittest.TestCase):
             self.assertEqual(admin.get_balance(), 40)
             self.assertEqual(account.get_balance(), 0)
 
+    def test_recurring_transfer(self):
+        """Tests that money can be transferred."""
+        for server in create_test_servers():
+            admin_id = RedditAccountId('admin')
+            admin = server.open_account(admin_id)
+            server.authorize(admin, admin, Authorization.ADMIN)
+            run_command_stream(
+                server,
+                (admin_id, 'admin-open general-kenobi'),
+                (admin_id, 'print-money 20 general-kenobi'),
+                (admin_id, 'print-money 20 admin'))
+            account_id = RedditAccountId('general-kenobi')
+            account = server.get_account(account_id)
+
+            self.assertEqual(admin.get_balance(), 20)
+            self.assertEqual(account.get_balance(), 20)
+            run_command_stream(
+                server,
+                (account_id, 'create-recurring-transfer 2 admin 10'))
+
+            self.assertEqual(admin.get_balance(), 20)
+            self.assertEqual(account.get_balance(), 20)
+            for i in range(10):
+                server.notify_tick_elapsed()
+                self.assertEqual(admin.get_balance(), 20 + (i + 1) * 2)
+                self.assertEqual(account.get_balance(), 20 - (i + 1) * 2)
+
     def test_freeze(self):
         """Tests that accounts can be frozen and unfrozen."""
         for server in create_test_servers():

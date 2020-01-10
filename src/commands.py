@@ -263,6 +263,41 @@ def process_admin_create_recurring_transfer(author: AccountId, message: str, ser
         tick_count)
     return 'Recurring transfer set up with ID `%s`.' % transfer.get_id()
 
+def parse_create_recurring_transfer(message):
+    """Parses a create-recurring-transfer message."""
+    body = message.split()
+    if len(body) != 4:
+        return None
+
+    _, amount_text, destination, tick_count_text = body
+    try:
+        amount = int(amount_text)
+        tick_count = int(tick_count_text)
+    except ValueError:
+        return None
+
+    return (amount, parse_account_id(destination), tick_count)
+
+def process_create_recurring_transfer(author: AccountId, message: str, server: Server):
+    """Processes a request to set up a recurring transfer."""
+    parse_result = parse_create_recurring_transfer(message)
+
+    if parse_result is None:
+        return 'Request formatted incorrectly. Expected `create-recurring-transfer AMOUNT_PER_TICK BENEFICIARY TICK_COUNT`.'
+
+    amount, destination_name, tick_count = parse_result
+
+    author_account = assert_is_account(author, server)
+    dest_account = assert_is_account(destination_name, server)
+
+    transfer = server.create_recurring_transfer(
+        author_account,
+        author_account,
+        dest_account,
+        amount * tick_count,
+        tick_count)
+    return 'Recurring transfer set up with ID `%s`.' % transfer.get_id()
+
 def parse_proxy_command(message):
     """Parses a proxy command into its components."""
     def parse_impl():
@@ -487,6 +522,11 @@ COMMANDS = {
         'generates `AMOUNT` money and deposits it in `BENEFICIARY`\'s account.',
         process_print_money,
         Authorization.ADMIN),
+    'create-recurring-transfer': (
+        'create-recurring-transfer AMOUNT_PER_TICK BENEFICIARY TICK_COUNT',
+        'creates a transfer that will transfer `AMOUNT_PER_TICK` from your account to `BENEFICIARY` every tick, for `TICK_COUNT` ticks.',
+        process_create_recurring_transfer,
+        Authorization.CITIZEN),
     'admin-create-recurring-transfer': (
         'admin-create-recurring-transfer AMOUNT_PER_TICK SENDER BENEFICIARY TICK_COUNT',
         'creates a transfer that will transfer `AMOUNT_PER_TICK` from `SENDER` to `BENEFICIARY` every tick, for `TICK_COUNT` ticks.',
