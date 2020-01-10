@@ -211,7 +211,7 @@ def parse_print_money(message):
         amount = int(amount_text)
     except ValueError:
         return None
-    
+
     return (amount, parse_account_id(beneficiary))
 
 def process_print_money(author: AccountId, message: str, server: Server):

@@ -7,6 +7,7 @@ import time
 import asyncio
 from accounting import LedgerServer, Authorization, RedditAccountId, DiscordAccountId, AccountId
 from commands import COMMANDS, list_commands_as_markdown, CommandException, assert_authorized, process_command
+from utils import split_into_chunks
 
 # move this to config?
 prefix = "e!"
@@ -84,23 +85,6 @@ async def reddit_loop(reddit, server):
 
         # Sleep for five seconds.
         await asyncio.sleep(5)
-
-def split_into_chunks(message: bytes, max_length):
-    """Splits a message into chunks. Prefers to split at newlines."""
-    if len(message) < max_length:
-        return [message]
-
-    split_index = max_length
-    newline_index = 0
-    last_newline_index = -1
-    while newline_index >= 0:
-        last_newline_index = newline_index
-        newline_index = message.find(b'\n', newline_index + 1, split_index)
-
-    if last_newline_index > 0:
-        split_index = last_newline_index
-
-    return [message[:split_index], split_into_chunks(message[split_index:], max_length)]
 
 if __name__ == '__main__':
     config = read_config()
