@@ -76,6 +76,24 @@ class CommandTests(unittest.TestCase):
             account = server.get_account(account_id)
             self.assertEqual(account.get_balance(), 0)
 
+    def test_authorize(self):
+        """Tests that a user can be authorized as a citizen, admin or developer."""
+        for server in create_test_servers():
+            admin_id = RedditAccountId('admin')
+            admin = server.open_account(admin_id)
+            server.authorize(admin, admin, Authorization.ADMIN)
+
+            account_id = RedditAccountId('general-kenobi')
+            run_command_stream(server, (account_id, 'open'))
+            account = server.get_account(account_id)
+            self.assertEqual(account.get_authorization(), Authorization.CITIZEN)
+            run_command_stream(server, (admin_id, 'authorize general-kenobi admin'))
+            self.assertEqual(account.get_authorization(), Authorization.ADMIN)
+            run_command_stream(server, (admin_id, 'authorize general-kenobi developer'))
+            self.assertEqual(account.get_authorization(), Authorization.DEVELOPER)
+            run_command_stream(server, (admin_id, 'authorize general-kenobi citizen'))
+            self.assertEqual(account.get_authorization(), Authorization.CITIZEN)
+
     def test_print_money(self):
         """Tests that money printing works."""
         for server in create_test_servers():

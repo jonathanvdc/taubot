@@ -272,7 +272,7 @@ class InMemoryServer(Server):
         self.accounts[alias_id] = account
         self.inv_accounts[account].append(alias_id)
 
-    def get_account(self, id: AccountId):
+    def get_account(self, id: AccountId) -> Account:
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         return self.accounts[id]
 
@@ -723,7 +723,7 @@ class BackendServer(Server):
            already exists. Otherwise returns the newly opened account."""
         return BackendCitizenAccount(self.server_id, backend.add_account(id, id, self.server_id, True))
 
-    def get_account(self, id):
+    def get_account(self, id) -> Account:
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         return BackendCitizenAccount(self.server_id, id)
 
