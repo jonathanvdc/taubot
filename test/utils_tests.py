@@ -24,6 +24,9 @@ class UtilTests(unittest.TestCase):
         self.assertListEqual(
             split_into_chunks(b'a' * 10 + b'\n' + b'a' * 10 + b'\n' + b'a' * 50, 30),
             [b'a' * 10 + b'\n' + b'a' * 10, b'a' * 30, b'a' * 20])
+        self.assertListEqual(
+            split_into_chunks(b'a' * 10 + b'\n' + b'a' * 10 + b'\n' + b'a' * 80, 30),
+            [b'a' * 10 + b'\n' + b'a' * 10, b'a' * 30, b'a' * 30, b'a' * 20])
 
 if __name__ == '__main__':
     unittest.main()
