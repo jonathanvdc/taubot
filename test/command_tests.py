@@ -8,6 +8,7 @@ sys.path.append(path.join(path.dirname(
 from commands import process_command
 from accounting import RedditAccountId, InMemoryServer, Server, Authorization, LedgerServer
 from typing import Sequence
+from base64 import b64encode
 import unittest
 
 def run_all(elements, action):
@@ -180,6 +181,18 @@ class CommandTests(unittest.TestCase):
             # Check that the alias was added.
             self.assertIn(admin_id, server.get_account_ids(admin))
             self.assertIn(alias_id, server.get_account_ids(admin))
+
+            # Now have some other account try to add an alias to the admin using a garbage token.
+            other_id = RedditAccountId('baby-yoda')
+            run_command_stream(server, (other_id, 'add-alias admin %s' % b64encode(b'howdy').decode('utf-8')))
+            # Ensure that the accounts weren't linked.
+            self.assertNotIn(other_id, server.get_account_ids(admin))
+
+            # Now have that account try to add an alias to the admin using a valid token intended
+            # for another account name.
+            run_command_stream(server, (other_id, 'add-alias admin %s' % token))
+            # Ensure that the accounts weren't linked.
+            self.assertNotIn(other_id, server.get_account_ids(admin))
 
 if __name__ == '__main__':
     unittest.main()
