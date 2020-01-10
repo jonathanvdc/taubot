@@ -42,6 +42,7 @@ def create_test_servers() -> Sequence[Server]:
     with LedgerServer(ledger_path) as ledger_server:
         pass
 
+
 class ServerTests(unittest.TestCase):
     """Tests that verify that the implementation of a Server and related data types are correct."""
 
@@ -51,6 +52,7 @@ class ServerTests(unittest.TestCase):
             self.assertFalse(server.has_account(RedditAccountId('taubot')))
             account = server.open_account(RedditAccountId('taubot'))
             self.assertEqual(account.get_balance(), 0)
+
 
 class CommandTests(unittest.TestCase):
 
@@ -218,6 +220,7 @@ class CommandTests(unittest.TestCase):
             account_id = RedditAccountId('general-kenobi')
             response = run_command_stream(server, (account_id, 'name'))[0]
             self.assertIn(str(account_id), response)
+
 
 if __name__ == '__main__':
     unittest.main()
