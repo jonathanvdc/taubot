@@ -162,5 +162,24 @@ class CommandTests(unittest.TestCase):
             self.assertTrue(server.can_transfer(account, admin, 20))
             self.assertTrue(server.can_transfer(admin, account, 20))
 
+    def test_link_accounts(self):
+        """Tests that accounts can be linked."""
+        for server in create_test_servers():
+            admin_id = RedditAccountId('admin')
+            alias_id = RedditAccountId('general-kenobi')
+            admin = server.open_account(admin_id)
+            server.authorize(admin, admin, Authorization.ADMIN)
+
+            # Create an alias request token.
+            token_msg = run_command_stream(server, (admin_id, 'request-alias general-kenobi'))[0]
+            token = token_msg.split('```')[1].strip()
+
+            # Add the alias.
+            run_command_stream(server, (alias_id, 'add-alias admin %s' % token))
+
+            # Check that the alias was added.
+            self.assertIn(admin_id, server.get_account_ids(admin))
+            self.assertIn(alias_id, server.get_account_ids(admin))
+
 if __name__ == '__main__':
     unittest.main()
