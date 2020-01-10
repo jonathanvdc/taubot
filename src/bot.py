@@ -78,10 +78,8 @@ async def reddit_loop(reddit, server):
         # process_recent_comments(reddit, server)
 
         # Notify the server that one or more ticks have elapsed if necessary.
-        time_diff = int(time.time() - server.last_tick_timestamp)
-        if time_diff > tick_duration:
-            for i in range(time_diff // tick_duration):
-                server.notify_tick_elapsed()
+        while int(time.time() - server.last_tick_timestamp) > tick_duration:
+            server.notify_tick_elapsed(server.last_tick_timestamp + tick_duration)
 
         # Sleep for five seconds.
         await asyncio.sleep(5)

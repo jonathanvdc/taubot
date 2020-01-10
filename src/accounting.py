@@ -225,7 +225,7 @@ class Server(object):
            is a server-defined timespan."""
         raise NotImplementedError()
 
-    def notify_tick_elapsed(self):
+    def notify_tick_elapsed(self, tick_timestamp=None):
         """Notifies the server that a tick has elapsed."""
         raise NotImplementedError()
 
@@ -335,7 +335,7 @@ class InMemoryServer(Server):
         self.recurring_transfers[rec_transfer.get_id()] = rec_transfer
         return rec_transfer
 
-    def notify_tick_elapsed(self):
+    def notify_tick_elapsed(self, tick_timestamp=None):
         """Notifies the server that a tick has elapsed."""
         finished_transfers = set()
         for id in self.recurring_transfers:
@@ -605,8 +605,9 @@ class LedgerServer(InMemoryServer):
             else:
                 raise Exception("Unknown ledger command '%s'." % cmd)
 
-    def _ledger_write(self, *args):
-        t = time.time()
+    def _ledger_write(self, *args, t=None):
+        if t is None:
+            t = time.time()
         elems = [str(t)] + list(map(str, args))
         salt, new_hash = generate_salt_and_hash(self.last_hash, elems, self.leading_zero_count)
         self.ledger_file.writelines(
@@ -678,10 +679,10 @@ class LedgerServer(InMemoryServer):
             amount)
         return result
 
-    def notify_tick_elapsed(self):
+    def notify_tick_elapsed(self, tick_timestamp=None):
         """Notifies the server that a tick has elapsed."""
         super().notify_tick_elapsed()
-        self.last_tick_timestamp = self._ledger_write('tick')
+        self.last_tick_timestamp = self._ledger_write('tick', t=tick_timestamp)
 
     def create_recurring_transfer(self, author, source, destination, total_amount, tick_count, transfer_id=None):
         """Creates and registers a new recurring transfer, i.e., a transfer that is spread out over
