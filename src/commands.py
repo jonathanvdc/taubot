@@ -153,18 +153,21 @@ def assert_is_account(account_name: Union[str, AccountId], server: Server) -> Ac
 
     if not server.has_account(account_name):
         raise CommandException(
-            ('Sorry, I can\'t process your request because `%s` does not have an account yet. '
-             'Accounts can be opened using the `open` command.') % account_name)
+            ('Sorry, I can\'t process your request because %s does not have an account yet. '
+             'Accounts can be opened using the `open` command.') % account_name.readable())
 
     return server.get_account(account_name)
 
 def assert_authorized(account_name: Union[str, AccountId], server: Server, auth_level: Authorization) -> Account:
     """Asserts that a particular account exists and has an authorization level that is at least `auth_level`.
        Returns the account."""
+    if isinstance(account_name, str):
+        account_name = parse_account_id(account_name)
+
     account = assert_is_account(account_name, server)
 
     if account.get_authorization().value < auth_level.value:
-        raise CommandException('Sorry, I can\'t process your request because `%s` does not have the required authorization.' % account_name)
+        raise CommandException('Sorry, I can\'t process your request because %s does not have the required authorization.' % account_name.readable())
 
     return account
 
