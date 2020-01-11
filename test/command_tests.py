@@ -157,6 +157,28 @@ class CommandTests(unittest.TestCase):
             self.assertEqual(admin.get_balance(), 40)
             self.assertEqual(account.get_balance(), 0)
 
+    def test_admin_transfer(self):
+        """Tests that an admin can order money can be transferred."""
+        for server in create_test_servers():
+            admin_id = RedditAccountId('admin')
+            admin = server.open_account(admin_id)
+            server.authorize(admin, admin, Authorization.ADMIN)
+            run_command_stream(
+                server,
+                (admin_id, 'admin-open general-kenobi'),
+                (admin_id, 'print-money 20 general-kenobi'))
+            account_id = RedditAccountId('general-kenobi')
+            account = server.get_account(account_id)
+
+            self.assertEqual(admin.get_balance(), 0)
+            self.assertEqual(account.get_balance(), 20)
+            run_command_stream(
+                server,
+                (admin_id, 'admin-transfer 20 general-kenobi admin'))
+
+            self.assertEqual(admin.get_balance(), 20)
+            self.assertEqual(account.get_balance(), 0)
+
     def test_recurring_transfer(self):
         """Tests that money can be transferred."""
         for server in create_test_servers():

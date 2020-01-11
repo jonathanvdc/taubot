@@ -671,7 +671,7 @@ class LedgerServer(InMemoryServer):
         """Transfers a particular amount of money from one account on this server to another on
            the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
            This action must not complete successfully if the transfer cannot be performed."""
-        result = super().transfer(source, author, destination, amount)
+        result = super().transfer(author, source, destination, amount)
         self._ledger_write(
             'transfer',
             self.get_account_id(author),
