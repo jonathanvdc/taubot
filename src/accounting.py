@@ -290,7 +290,8 @@ class InMemoryServer(Server):
 
     def list_accounts(self):
         """Lists all accounts on this server."""
-        return self.accounts.values()
+        unique_accounts = set(self.accounts.values())
+        return sorted(unique_accounts, key=lambda account: str(self.get_account_id(account)))
 
     def authorize(self, author: Account, account: Account, auth_level: Authorization):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
