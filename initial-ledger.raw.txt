@@ -1,4 +1,4 @@
-0 open Mobilfan fb7b9621-8670-47f1-98b5-eb9519454c0b
-0 authorize @government Mobilfan DEVELOPER
+0 open BTernaryTau fb7b9621-8670-47f1-98b5-eb9519454c0b
+0 authorize @government BTernaryTau DEVELOPER
 0 open jedi-turncoat 549395de-9595-404c-bf3b-5b27dbccc4f5
 0 authorize @government jedi-turncoat DEVELOPER
