@@ -66,9 +66,9 @@ async def message_loop(reddit, server):
         await asyncio.sleep(5)
 
 async def tick_loop(server):
-  """The bot's tick loop, which looks at the clock every now and then and notifies the
-     server when a tick has elapsed."""
-      # Let's make a tick twice every day.
+    """The bot's tick loop, which looks at the clock every now and then and notifies the
+       server when a tick has elapsed."""
+    # Let's make a tick twice every day.
     tick_duration = 12 * 60 * 60
 
     while True:
@@ -78,7 +78,7 @@ async def tick_loop(server):
 
         # Sleep for a while.
         await asyncio.sleep(5)
-        
+
 async def comment_loop(reddit, server):
     """The bot's main Reddit comment loop."""
     # TODO: handle multiple subreddits.
