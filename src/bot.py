@@ -124,4 +124,7 @@ if __name__ == '__main__':
         asyncio.get_event_loop().create_task(tick_loop(server))
         asyncio.get_event_loop().create_task(message_loop(reddit, server))
         asyncio.get_event_loop().create_task(comment_loop(reddit, server))
-        discord_client.run(config['discord_token'])
+        if 'discord_token' in config:
+            discord_client.run(config['discord_token'])
+        else:
+            asyncio.get_event_loop().run_forever()

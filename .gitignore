@@ -1,5 +1,6 @@
 # Keep the bot configuration private.
 bot-config.json
+*-bot-config.json
 ledger.txt
 
 # Ignore test files.
