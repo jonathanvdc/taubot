@@ -1,14 +1,13 @@
 # taubot
 
-This is a WIP Reddit economy bot implementation in Python.
+This is a Reddit/Discord economy bot implementation in Python.
 
 ## Dependencies
 
-Taubot requires the `praw` and `pycryptodome` pip packages. Install with
+Taubot's dependencies are defined in the `requirements.txt` file. Install them with
 
 ```bash
-pip3 install praw
-pip3 install pycryptodome
+pip3 install -r requirements.txt
 ```
 
 ## Usage

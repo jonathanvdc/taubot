@@ -192,6 +192,10 @@ class Server(object):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
         raise NotImplementedError()
 
+    def set_frozen(self, author: Account, account: Account, is_frozen: bool):
+        """Freezes or unfreezes `account` on the authority of `author`."""
+        raise NotImplementedError()
+
     def print_money(self, author: Account, account: Account, amount: int):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
         raise NotImplementedError()
@@ -221,7 +225,7 @@ class Server(object):
            is a server-defined timespan."""
         raise NotImplementedError()
 
-    def notify_tick_elapsed(self):
+    def notify_tick_elapsed(self, tick_timestamp=None):
         """Notifies the server that a tick has elapsed."""
         raise NotImplementedError()
 
@@ -268,7 +272,7 @@ class InMemoryServer(Server):
         self.accounts[alias_id] = account
         self.inv_accounts[account].append(alias_id)
 
-    def get_account(self, id: AccountId):
+    def get_account(self, id: AccountId) -> Account:
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         return self.accounts[id]
 
@@ -286,11 +290,16 @@ class InMemoryServer(Server):
 
     def list_accounts(self):
         """Lists all accounts on this server."""
-        return self.accounts.values()
+        unique_accounts = set(self.accounts.values())
+        return sorted(unique_accounts, key=lambda account: str(self.get_account_id(account)))
 
     def authorize(self, author: Account, account: Account, auth_level: Authorization):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
         account.auth = auth_level
+
+    def set_frozen(self, author: Account, account: Account, is_frozen: bool):
+        """Freezes or unfreezes `account` on the authority of `author`."""
+        account.frozen = is_frozen
 
     def add_public_key(self, account: Account, key):
         """Associates a public key with an account. The key must be an ECC key."""
@@ -327,7 +336,7 @@ class InMemoryServer(Server):
         self.recurring_transfers[rec_transfer.get_id()] = rec_transfer
         return rec_transfer
 
-    def notify_tick_elapsed(self):
+    def notify_tick_elapsed(self, tick_timestamp=None):
         """Notifies the server that a tick has elapsed."""
         finished_transfers = set()
         for id in self.recurring_transfers:
@@ -516,6 +525,10 @@ class LedgerServer(InMemoryServer):
         return self
 
     def __exit__(self, type, value, traceback):
+        self.close()
+
+    def close(self):
+        """Closes the server's underlying ledger file."""
         self.ledger_file.close()
 
     def _read_ledger(self, ledger_path):
@@ -559,6 +572,11 @@ class LedgerServer(InMemoryServer):
                     self.get_account_from_string(elems[1]),
                     self.get_account_from_string(elems[2]),
                     Authorization[elems[3]])
+            elif cmd == 'set-frozen':
+                super().set_frozen(
+                    self.get_account_from_string(elems[1]),
+                    self.get_account_from_string(elems[2]),
+                    elems[3] == 'True')
             elif cmd == 'print-money':
                 super().print_money(
                     self.get_account_from_string(elems[1]),
@@ -590,8 +608,9 @@ class LedgerServer(InMemoryServer):
             else:
                 raise Exception("Unknown ledger command '%s'." % cmd)
 
-    def _ledger_write(self, *args):
-        t = time.time()
+    def _ledger_write(self, *args, t=None):
+        if t is None:
+            t = time.time()
         elems = [str(t)] + list(map(str, args))
         salt, new_hash = generate_salt_and_hash(self.last_hash, elems, self.leading_zero_count)
         with open(self.ledger_path, 'a') as f:
@@ -625,6 +644,15 @@ class LedgerServer(InMemoryServer):
             auth_level.name)
         return result
 
+    def set_frozen(self, author: Account, account: Account, is_frozen: bool):
+        """Freezes or unfreezes `account` on the authority of `author`."""
+        super().set_frozen(author, account, is_frozen)
+        self._ledger_write(
+            'set-frozen',
+            self.get_account_id(author),
+            self.get_account_id(account),
+            is_frozen)
+
     def add_public_key(self, account, key):
         """Associates a public key with an account. The key must be an ECC key."""
         super().add_public_key(account, key)
@@ -646,7 +674,7 @@ class LedgerServer(InMemoryServer):
         """Transfers a particular amount of money from one account on this server to another on
            the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
            This action must not complete successfully if the transfer cannot be performed."""
-        result = super().transfer(source, author, destination, amount)
+        result = super().transfer(author, source, destination, amount)
         self._ledger_write(
             'transfer',
             self.get_account_id(author),
@@ -655,10 +683,10 @@ class LedgerServer(InMemoryServer):
             amount)
         return result
 
-    def notify_tick_elapsed(self):
+    def notify_tick_elapsed(self, tick_timestamp=None):
         """Notifies the server that a tick has elapsed."""
         super().notify_tick_elapsed()
-        self.last_tick_timestamp = self._ledger_write('tick')
+        self.last_tick_timestamp = self._ledger_write('tick', t=tick_timestamp)
 
     def create_recurring_transfer(self, author, source, destination, total_amount, tick_count, transfer_id=None):
         """Creates and registers a new recurring transfer, i.e., a transfer that is spread out over
@@ -700,7 +728,7 @@ class BackendServer(Server):
            already exists. Otherwise returns the newly opened account."""
         return BackendCitizenAccount(self.server_id, backend.add_account(id, id, self.server_id, True))
 
-    def get_account(self, id):
+    def get_account(self, id) -> Account:
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         return BackendCitizenAccount(self.server_id, id)
 

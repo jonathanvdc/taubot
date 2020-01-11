@@ -7,6 +7,7 @@ import time
 import asyncio
 from accounting import LedgerServer, Authorization, RedditAccountId, DiscordAccountId, AccountId
 from commands import COMMANDS, list_commands_as_markdown, CommandException, assert_authorized, process_command
+from utils import split_into_chunks
 
 # move this to config?
 prefix = "e!"
@@ -57,27 +58,29 @@ def process_comment(comment, server):
 
 async def message_loop(reddit, server):
     """The bot's main Reddit message loop."""
-    # Let's make a tick twice every day.
-    tick_duration = 12 * 60 * 60
-
     while True:
         # Process messages.
         process_all_messages(reddit, server)
 
-        # Notify the server that one or more ticks have elapsed if necessary.
-        time_diff = int(time.time() - server.last_tick_timestamp)
-        if time_diff > tick_duration:
-            for i in range(time_diff // tick_duration):
-                server.notify_tick_elapsed()
-
         # Sleep for five seconds.
         await asyncio.sleep(5)
 
+async def tick_loop(server):
+  """The bot's tick loop, which looks at the clock every now and then and notifies the
+     server when a tick has elapsed."""
+      # Let's make a tick twice every day.
+    tick_duration = 12 * 60 * 60
+
+    while True:
+        # Notify the server that one or more ticks have elapsed if necessary.
+        while int(time.time() - server.last_tick_timestamp) > tick_duration:
+            server.notify_tick_elapsed(server.last_tick_timestamp + tick_duration)
+
+        # Sleep for a while.
+        await asyncio.sleep(5)
+        
 async def comment_loop(reddit, server):
     """The bot's main Reddit comment loop."""
-    # Let's make a tick twice every day.
-    tick_duration = 12 * 60 * 60
-    
     # TODO: handle multiple subreddits.
     for comment in reddit.subreddit('simeconomy').stream.comments(pause_after=0):
         # Prcoess next comment if necessary.
@@ -85,32 +88,9 @@ async def comment_loop(reddit, server):
             if comment.body.startswith(prefix):
                 process_comment(comment, server)
                 await asyncio.sleep(10 * 60)
-        
-        # Notify the server that one or more ticks have elapsed if necessary.
-        time_diff = int(time.time() - server.last_tick_timestamp)
-        if time_diff > tick_duration:
-            for i in range(time_diff // tick_duration):
-                server.notify_tick_elapsed()
 
         # Sleep for five seconds.
         await asyncio.sleep(5)
-
-def split_into_chunks(message: bytes, max_length):
-    """Splits a message into chunks. Prefers to split at newlines."""
-    if len(message) < max_length:
-        return [message]
-
-    split_index = max_length
-    newline_index = 0
-    last_newline_index = -1
-    while newline_index >= 0:
-        last_newline_index = newline_index
-        newline_index = message.find(b'\n', newline_index + 1, split_index)
-
-    if last_newline_index > 0:
-        split_index = last_newline_index
-
-    return [message[:split_index], split_into_chunks(message[split_index:], max_length)]
 
 if __name__ == '__main__':
     config = read_config()
@@ -141,6 +121,7 @@ if __name__ == '__main__':
                 await message.channel.send(chunk.decode('utf-8'))
 
     with LedgerServer('ledger.txt') as server:
+        asyncio.get_event_loop().create_task(tick_loop(server))
         asyncio.get_event_loop().create_task(message_loop(reddit, server))
         asyncio.get_event_loop().create_task(comment_loop(reddit, server))
         discord_client.run(config['discord_token'])

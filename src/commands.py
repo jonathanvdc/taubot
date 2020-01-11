@@ -88,21 +88,41 @@ def process_open_account(author: AccountId, message: str, server: Server):
     server.open_account(author)
     return 'Hi there %s. Your account has been opened successfully. Thank you for your business.' % author.readable()
 
-def process_admin_open_account(author: AccountId, message: str, server: Server):
-    """Processes a message that tries to open a new account."""
-    assert_authorized(author, server, Authorization.ADMIN)
+def parse_account_name_command(message: str) -> str:
+    """Parses a command that has a single parameter: an account name."""
     body = message.split()
     if len(body) != 2:
         raise CommandException(
-            'Incorrectly formatted command; expected `admin-open ACCOUNT_NAME`, '
-            'where `ACCOUNT_NAME` is the name of the account to create.')
+            'Incorrectly formatted command; expected `%s ACCOUNT_NAME`.' % body[0])
+    return body[1]
 
-    account_name = parse_account_id(body[1])
+def process_admin_open_account(author: AccountId, message: str, server: Server):
+    """Processes a message that tries to open a new account."""
+    assert_authorized(author, server, Authorization.ADMIN)
+    account_name = parse_account_name_command(message)
     if server.has_account(account_name):
         raise CommandException('Account `%s` already exists.' % account_name)
 
     server.open_account(account_name)
     return 'Account `%s` has been opened successfully.' % account_name
+
+def process_admin_freeze(author: AccountId, message: str, server: Server):
+    """Processes a message that freezes an account."""
+    author_account = assert_authorized(author, server, Authorization.ADMIN)
+    account_name = parse_account_name_command(message)
+    account = assert_is_account(account_name, server)
+
+    server.set_frozen(author_account, account, True)
+    return 'Account `%s` was frozen successfully.' % account_name
+
+def process_admin_unfreeze(author: AccountId, message: str, server: Server):
+    """Processes a message that unfreezes an account."""
+    author_account = assert_authorized(author, server, Authorization.ADMIN)
+    account_name = parse_account_name_command(message)
+    account = assert_is_account(account_name, server)
+
+    server.set_frozen(author_account, account, False)
+    return 'Account `%s` was unfrozen successfully.' % account_name
 
 def process_balance(author: AccountId, message: str, server: Server):
     """Processes a message requesting the balance on an account."""
@@ -191,7 +211,7 @@ def parse_print_money(message):
         amount = int(amount_text)
     except ValueError:
         return None
-    
+
     return (amount, parse_account_id(beneficiary))
 
 def process_print_money(author: AccountId, message: str, server: Server):
@@ -238,6 +258,41 @@ def process_admin_create_recurring_transfer(author: AccountId, message: str, ser
     transfer = server.create_recurring_transfer(
         author_account,
         sender_account,
+        dest_account,
+        amount * tick_count,
+        tick_count)
+    return 'Recurring transfer set up with ID `%s`.' % transfer.get_id()
+
+def parse_create_recurring_transfer(message):
+    """Parses a create-recurring-transfer message."""
+    body = message.split()
+    if len(body) != 4:
+        return None
+
+    _, amount_text, destination, tick_count_text = body
+    try:
+        amount = int(amount_text)
+        tick_count = int(tick_count_text)
+    except ValueError:
+        return None
+
+    return (amount, parse_account_id(destination), tick_count)
+
+def process_create_recurring_transfer(author: AccountId, message: str, server: Server):
+    """Processes a request to set up a recurring transfer."""
+    parse_result = parse_create_recurring_transfer(message)
+
+    if parse_result is None:
+        return 'Request formatted incorrectly. Expected `create-recurring-transfer AMOUNT_PER_TICK BENEFICIARY TICK_COUNT`.'
+
+    amount, destination_name, tick_count = parse_result
+
+    author_account = assert_is_account(author, server)
+    dest_account = assert_is_account(destination_name, server)
+
+    transfer = server.create_recurring_transfer(
+        author_account,
+        author_account,
         dest_account,
         amount * tick_count,
         tick_count)
@@ -467,6 +522,11 @@ COMMANDS = {
         'generates `AMOUNT` money and deposits it in `BENEFICIARY`\'s account.',
         process_print_money,
         Authorization.ADMIN),
+    'create-recurring-transfer': (
+        'create-recurring-transfer AMOUNT_PER_TICK BENEFICIARY TICK_COUNT',
+        'creates a transfer that will transfer `AMOUNT_PER_TICK` from your account to `BENEFICIARY` every tick, for `TICK_COUNT` ticks.',
+        process_create_recurring_transfer,
+        Authorization.CITIZEN),
     'admin-create-recurring-transfer': (
         'admin-create-recurring-transfer AMOUNT_PER_TICK SENDER BENEFICIARY TICK_COUNT',
         'creates a transfer that will transfer `AMOUNT_PER_TICK` from `SENDER` to `BENEFICIARY` every tick, for `TICK_COUNT` ticks.',
@@ -477,5 +537,15 @@ COMMANDS = {
         'opens a new account with name `ACCOUNT_NAME`. '
             'If an existing user has `ACCOUNT_NAME`, then the newly created account will become that user\'s account.',
         process_admin_open_account,
+        Authorization.ADMIN),
+    'admin-freeze': (
+        'admin-freeze ACCOUNT_NAME',
+        'freezes the account with name `ACCOUNT_NAME`.',
+        process_admin_freeze,
+        Authorization.ADMIN),
+    'admin-unfreeze': (
+        'admin-unfreeze ACCOUNT_NAME',
+        'unfreezes the account with name `ACCOUNT_NAME`.',
+        process_admin_unfreeze,
         Authorization.ADMIN)
 }
