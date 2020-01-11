@@ -1,7 +1,7 @@
 # This module defines logic for processing bot commands.
 import base64
 from typing import Union
-from accounting import Authorization, Account, AccountId, Server, parse_account_id
+from accounting import Authorization, Account, AccountId, Server, parse_account_id, RedditAccountId, DiscordAccountId
 from Crypto.PublicKey import ECC
 from Crypto.Signature import DSS
 from Crypto.Hash import SHA3_512
@@ -399,9 +399,17 @@ def process_request_alias(author: AccountId, message: str, server: Server):
 
     # At this point we will allow the private key to be forgotten.
 
-    return ('Your alias request code for account {0} can be found below. '
-        'Make {0} an alias for this account ({2}) using the `add-alias` command.\n\n```\n{1}\n```').format(
-            str(alias_id), signature, author.readable())
+    # Compose a helpful message for as to how the bot can be contacted to link accounts.
+    if isinstance(alias_id, RedditAccountId):
+        contact_message = 'Send me that exact command as a Reddit Private Message (not a direct chat) from %s.' % alias_id.readable()
+    elif isinstance(alias_id, DiscordAccountId):
+        contact_message = 'Send me that exact command prefixed with a mention of my name via Discord from account %s.' % alias_id
+    else:
+        contact_message = ''
+
+    return ('I created an alias request code for you. '
+        'Make {0} an alias for this account ({2}) by sending me the following message from {3}.\n\n```\nadd-alias {4} {1}\n```\n\n{5}').format(
+            str(alias_id), signature, author.readable(), alias_id.readable(), str(author), contact_message)
 
 def process_add_alias(author: AccountId, message: str, server: Server):
     """Processes a request to add `author` as an alias to an account."""

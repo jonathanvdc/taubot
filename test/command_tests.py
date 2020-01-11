@@ -242,7 +242,7 @@ class CommandTests(unittest.TestCase):
 
             # Create an alias request token.
             token_msg = run_command_stream(server, (admin_id, 'request-alias general-kenobi'))[0]
-            token = token_msg.split('```')[1].strip()
+            token = token_msg.split('```')[1].strip().split()[2]
 
             # Add the alias.
             run_command_stream(server, (alias_id, 'add-alias admin %s' % token))
