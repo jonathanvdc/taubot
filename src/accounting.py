@@ -515,6 +515,7 @@ class LedgerServer(InMemoryServer):
         super().__init__()
         self.last_tick_timestamp = time.time()
         self.last_hash = b''
+        self.ledger_path = ledger_path
         self.leading_zero_count = leading_zero_count
         if os.path.isfile(ledger_path):
             self._read_ledger(ledger_path)
@@ -534,6 +535,7 @@ class LedgerServer(InMemoryServer):
         """Reads a ledger at a particular path."""
         with open(ledger_path, 'r') as f:
             lines = f.readlines()
+            f.close()
 
         for line_num, line in enumerate(lines):
             if line.isspace() or line == '':
@@ -611,8 +613,9 @@ class LedgerServer(InMemoryServer):
             t = time.time()
         elems = [str(t)] + list(map(str, args))
         salt, new_hash = generate_salt_and_hash(self.last_hash, elems, self.leading_zero_count)
-        self.ledger_file.writelines(
-            ' '.join([new_hash.hexdigest(), salt] + elems) + '\n')
+        with open(self.ledger_path, 'a') as f:
+            f.writelines(' '.join([new_hash.hexdigest(), salt] + elems) + '\n')
+            f.close()
         self.last_hash = new_hash.digest()
         return t
 
