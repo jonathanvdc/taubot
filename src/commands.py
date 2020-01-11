@@ -415,7 +415,7 @@ def process_add_alias(author: AccountId, message: str, server: Server):
 
     if is_signed_by(aliased_account, str(author), signature):
         server.add_account_alias(aliased_account, author)
-        return 'Alias set up sucessfully. %s and %s now refer to the same account.' % (
+        return 'Alias set up successfully. %s and %s now refer to the same account.' % (
             aliased_account_name, author.readable())
     else:
         raise CommandException('Cannot set up alias because the signature is invalid.')
