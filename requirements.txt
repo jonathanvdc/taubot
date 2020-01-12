@@ -1,2 +1,3 @@
 praw
 pycryptodome
+discord.py
