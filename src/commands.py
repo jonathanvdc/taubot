@@ -113,7 +113,7 @@ def process_admin_freeze(author: AccountId, message: str, server: Server):
     account = assert_is_account(account_name, server)
 
     server.set_frozen(author_account, account, True)
-    return 'Account `%s` was frozen successfully.' % account_name
+    return 'Account %s was frozen successfully.' % account_name
 
 def process_admin_unfreeze(author: AccountId, message: str, server: Server):
     """Processes a message that unfreezes an account."""
@@ -122,7 +122,7 @@ def process_admin_unfreeze(author: AccountId, message: str, server: Server):
     account = assert_is_account(account_name, server)
 
     server.set_frozen(author_account, account, False)
-    return 'Account `%s` was unfrozen successfully.' % account_name
+    return 'Account %s was unfrozen successfully.' % account_name
 
 def process_balance(author: AccountId, message: str, server: Server):
     """Processes a message requesting the balance on an account."""
