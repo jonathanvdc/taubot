@@ -6,7 +6,6 @@ from Crypto.PublicKey import ECC
 from Crypto.Signature import DSS
 from Crypto.Hash import SHA3_512
 
-
 class CommandException(Exception):
     """The type of exception that is thrown when a command fails."""
     pass
@@ -448,7 +447,7 @@ def process_command(author: AccountId, message: str, server: Server):
             return str(e)
     else:
         return 'Hi %s! I didn\'t quite understand command your command `%s`. Here\'s a list of commands I do understand:\n\n%s' % (
-            author.readable(), split_msg[0], list_commands_as_markdown(author, server))
+            author.readable(), split_msg[0], list_commands_as_markdown(author, server)) # Sends the help message.
 
 def list_commands(author: AccountId, server: Server):
     """Creates a list of all commands accepted by this bot."""
