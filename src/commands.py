@@ -478,12 +478,14 @@ Hi %s! Here's a list of the commands I understand:
 # A list of the commands accepted by the bot. Every command
 # is essentially a function that maps a message to a reply.
 # For convenience, every command is associated with a help
-# string here.
+# string here. It's formatted as such:
+# 'commandName': ('commandFormat', 'helpDescription', 'command')
 COMMANDS = {
     'help': ('help', 'prints a help message.', process_help),
     'transfer': ('transfer AMOUNT BENEFICIARY', 'transfers `AMOUNT` to user `BENEFICIARY`\'s account.', process_transfer),
     'open': ('open', 'opens a new account.', process_open_account),
     'balance': ('balance', 'prints the balance on your account.', process_balance),
+    'bal': ('bal', 'prints the balance on your account.', process_balance),
     'add-public-key': (
         'add-public-key',
         'associates an ECC public key with your account. '
