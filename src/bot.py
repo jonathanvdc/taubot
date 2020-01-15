@@ -108,7 +108,7 @@ if __name__ == '__main__':
             '<@%s>' % discord_client.user.id,
             '<@!%s>' % discord_client.user.id)
 
-        if content.startswith(prefixes):
+        if content.startswith(prefixes): # Checking all messages that start with the prefix.
             response = '<@%s> %s' % (
                 message.author.id,
                 process_command(

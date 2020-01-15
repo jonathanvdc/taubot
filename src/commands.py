@@ -7,7 +7,6 @@ from Crypto.Signature import DSS
 from Crypto.Hash import SHA3_512
 from random import choice, randint
 
-
 class CommandException(Exception):
     """The type of exception that is thrown when a command fails."""
     pass
@@ -450,7 +449,7 @@ def process_command(author: AccountId, message: str, server: Server, prefix=''):
             return str(e)
     else:
         return 'Hi %s! I didn\'t quite understand command your command `%s`. Here\'s a list of commands I do understand:\n\n%s' % (
-            author.readable(), split_msg[0], list_commands_as_markdown(author, server))
+            author.readable(), split_msg[0], list_commands_as_markdown(author, server)) # Sends the help message.
 
 def list_commands(author: AccountId, server: Server):
     """Creates a list of all commands accepted by this bot."""
@@ -537,13 +536,15 @@ Hi %s! Here's a list of the commands I understand:
 # A list of the commands accepted by the bot. Every command
 # is essentially a function that maps a message to a reply.
 # For convenience, every command is associated with a help
-# string here.
+# string here. It's formatted as such:
+# 'commandName': ('commandFormat', 'helpDescription', 'command')
 COMMANDS = {
     'reference': ('reference', 'prints a command reference message.', process_reference),
     'help': ('help', 'prints a help message.', process_help),
     'transfer': ('transfer AMOUNT BENEFICIARY', 'transfers `AMOUNT` to user `BENEFICIARY`\'s account.', process_transfer),
     'open': ('open', 'opens a new account.', process_open_account),
     'balance': ('balance', 'prints the balance on your account.', process_balance),
+    'bal': ('bal', 'prints the balance on your account.', process_balance),
     'add-public-key': (
         'add-public-key',
         'associates an ECC public key with your account. '
