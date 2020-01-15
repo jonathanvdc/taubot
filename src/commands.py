@@ -489,7 +489,7 @@ def get_how_to_reach_message(platform_name):
 
 def get_generic_help_message(author: AccountId, prefix, platform_name):
     """Gets the generic help message for account holders."""
-    interpersonal_relation = choice(['friend', 'bff', 'homie', 'buddy', 'mortal enemy', 'frenemy'])
+    interpersonal_relation = choice(['friend', 'BFF', 'homie', 'buddy', 'mortal enemy', 'frenemy', 'next door neighbor'])
     suggested_amount = randint(1, 100)
     suggested_name = PLATFORMS[platform_name]['example_username'] if 'example_username' in PLATFORMS[platform_name] else prefix
     return '''How can I help you today?
