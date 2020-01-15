@@ -114,7 +114,8 @@ if __name__ == '__main__':
                 process_command(
                     DiscordAccountId(str(message.author.id)),
                     content[content.index('>') + 1:].lstrip(),
-                    server))
+                    server,
+                    prefixes[0] + ' '))
 
             chunks = split_into_chunks(response.encode('utf-8'), 2000)
             for chunk in chunks:

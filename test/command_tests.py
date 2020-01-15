@@ -78,6 +78,18 @@ class CommandTests(unittest.TestCase):
             account = server.get_account(account_id)
             self.assertEqual(account.get_balance(), 0)
 
+    def test_help(self):
+        """Tests that the help command does not crash the bot."""
+        for server in create_test_servers():
+            account_id = RedditAccountId('general-kenobi')
+            run_command_stream(server, (account_id, 'help'), (account_id, 'open'), (account_id, 'help'))
+
+    def test_reference(self):
+        """Tests that the reference command does not crash the bot."""
+        for server in create_test_servers():
+            account_id = RedditAccountId('general-kenobi')
+            run_command_stream(server, (account_id, 'reference'), (account_id, 'open'), (account_id, 'reference'))
+
     def test_authorize(self):
         """Tests that a user can be authorized as a citizen, admin or developer."""
         for server in create_test_servers():
