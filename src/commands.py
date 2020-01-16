@@ -540,7 +540,9 @@ Hi %s! Here's a list of the commands I understand:
 # 'commandName': ('commandFormat', 'helpDescription', 'command')
 COMMANDS = {
     'reference': ('reference', 'prints a command reference message.', process_reference),
+    'ref': ('ref', 'prints a command reference message.', process_reference),
     'help': ('help', 'prints a help message.', process_help),
+    'hlp': ('hlp', 'prints a help message.', process_help),
     'transfer': ('transfer AMOUNT BENEFICIARY', 'transfers `AMOUNT` to user `BENEFICIARY`\'s account.', process_transfer),
     'open': ('open', 'opens a new account.', process_open_account),
     'balance': ('balance', 'prints the balance on your account.', process_balance),
