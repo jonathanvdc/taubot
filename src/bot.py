@@ -109,18 +109,20 @@ if __name__ == '__main__':
             '<@!%s>' % discord_client.user.id)
 
         if content.startswith(prefixes): # Checking all messages that start with the prefix.
-            response = '<@%s> %s' % (
-                message.author.id,
-                discord_postprocess(
-                    process_command(
-                        DiscordAccountId(str(message.author.id)),
-                        content[content.index('>') + 1:].lstrip(),
-                        server,
-                        prefixes[0] + ' ')))
+            response = discord_postprocess(
+                process_command(
+                    DiscordAccountId(str(message.author.id)),
+                    content[content.index('>') + 1:].lstrip(),
+                    server,
+                    prefixes[0] + ' '))
 
-            chunks = split_into_chunks(response.encode('utf-8'), 2000)
-            for chunk in chunks:
-                await message.channel.send(chunk.decode('utf-8'))
+            chunks = split_into_chunks(response.encode('utf-8'), 1024)
+            embed = discord.Embed(color=0x3b4dff)
+            for i, chunk in enumerate(chunks):
+                title = "(cont'd)" if i > 0 else 'Response to %s' % message.author.name
+                embed.add_field(name=title, value=chunk.decode('utf-8'), inline=False)
+
+            await message.channel.send(embed=embed)
 
     with LedgerServer('ledger.txt') as server:
         asyncio.get_event_loop().create_task(tick_loop(server))
