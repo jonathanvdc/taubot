@@ -21,3 +21,8 @@ def split_into_chunks(message: bytes, max_length):
     first = message[:split_index]
 
     return [first] + split_into_chunks(second, max_length)
+
+def discord_postprocess(message: str) -> str:
+    """Postprocesses a message for the Discord platform. This entails
+       replacing double newlines with single newlines."""
+    return message.replace('\n\n', '\n')

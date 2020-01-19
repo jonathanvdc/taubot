@@ -7,7 +7,7 @@ import time
 import asyncio
 from accounting import LedgerServer, Authorization, RedditAccountId, DiscordAccountId, AccountId
 from commands import COMMANDS, list_commands_as_markdown, CommandException, assert_authorized, process_command
-from utils import split_into_chunks
+from utils import split_into_chunks, discord_postprocess
 
 # move this to config?
 prefix = "e!"
@@ -111,11 +111,12 @@ if __name__ == '__main__':
         if content.startswith(prefixes): # Checking all messages that start with the prefix.
             response = '<@%s> %s' % (
                 message.author.id,
-                process_command(
-                    DiscordAccountId(str(message.author.id)),
-                    content[content.index('>') + 1:].lstrip(),
-                    server,
-                    prefixes[0] + ' '))
+                discord_postprocess(
+                    process_command(
+                        DiscordAccountId(str(message.author.id)),
+                        content[content.index('>') + 1:].lstrip(),
+                        server,
+                        prefixes[0] + ' ')))
 
             chunks = split_into_chunks(response.encode('utf-8'), 2000)
             for chunk in chunks:
