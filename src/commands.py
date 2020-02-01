@@ -225,8 +225,13 @@ def process_print_money(author: AccountId, message: str, server: Server, **kwarg
         raise CommandException('Command formatted incorrectly. Expected format `print-money AMOUNT BENEFICIARY`.')
 
     amount, beneficiary = parsed
+    if amount < 0:
+        raise CommandException('Cannot print negative amounts of money.')
+
     beneficiary_account = assert_is_account(beneficiary, server)
-    server.print_money(author_account, beneficiary_account, amount)
+    if amount != 0:
+        server.print_money(author_account, beneficiary_account, amount)
+
     return 'Money printed successfully.'
 
 def parse_admin_create_recurring_transfer(message):

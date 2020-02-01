@@ -131,6 +131,20 @@ class CommandTests(unittest.TestCase):
 
             self.assertEqual(admin.get_balance(), 20)
 
+    def test_no_print_negative_money(self):
+        """Tests that negative money cannot be printed."""
+        for server in create_test_servers():
+            admin_id = RedditAccountId('admin')
+            admin = server.open_account(admin_id)
+            server.authorize(admin, admin, Authorization.ADMIN)
+
+            self.assertEqual(admin.get_balance(), 0)
+            run_command_stream(
+                server,
+                (admin_id, 'print-money -20 admin'))
+
+            self.assertEqual(admin.get_balance(), 0)
+
     def test_balance(self):
         """Tests that the balance command works."""
         for server in create_test_servers():
