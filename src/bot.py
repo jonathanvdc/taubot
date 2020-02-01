@@ -109,18 +109,23 @@ if __name__ == '__main__':
             '<@!%s>' % discord_client.user.id)
 
         if content.startswith(prefixes): # Checking all messages that start with the prefix.
+            command_content = content[content.index('>') + 1:].lstrip()
             response = discord_postprocess(
                 process_command(
                     DiscordAccountId(str(message.author.id)),
-                    content[content.index('>') + 1:].lstrip(),
+                    command_content,
                     server,
                     prefixes[0] + ' '))
 
             chunks = split_into_chunks(response.encode('utf-8'), 1024)
             embed = discord.Embed(color=0x3b4dff)
+            title = command_content.split()[0] if len(command_content.split()) > 0 else 'Empty Message'
             for i, chunk in enumerate(chunks):
-                title = "(cont'd)" if i > 0 else 'Response to %s' % message.author.name
+                title = "(cont'd)" if i > 0 else title
                 embed.add_field(name=title, value=chunk.decode('utf-8'), inline=False)
+
+            embed.set_thumbnail(url=message.author.avatar_url)
+            embed.set_footer(text="This was sent in response to %s's message; you can safely disregard it if that's not you." % message.author.name)
 
             await message.channel.send(embed=embed)
 
