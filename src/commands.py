@@ -437,7 +437,12 @@ def process_command(author: AccountId, message: str, server: Server, prefix=''):
     if len(split_msg) == 0:
         return 'Hi %s! You sent me an empty message. Here\'s a list of commands I do understand:\n\n%s' % (
             author.readable(), list_commands_as_markdown(author, server))
-    elif split_msg[0] in COMMANDS:
+
+    # Expand aliases if necessary.
+    while split_msg[0] in ALIASES:
+        split_msg[0] = ALIASES[split_msg[0]]
+
+    if split_msg[0] in COMMANDS:
         try:
             cmd = COMMANDS[split_msg[0]]
             if len(cmd) >= 4 and cmd[3].value > Authorization.CITIZEN.value:
@@ -533,6 +538,15 @@ Hi %s! Here's a list of the commands I understand:
 
 %s''' % (author.readable(), list_commands_as_markdown(author, server))
 
+# A list of command aliases accepted by the bot. Every key
+# in this dictionary is recognized as a command and expanded
+# to the corresponding value.
+ALIASES = {
+    'hlp': 'help',
+    'ref': 'reference',
+    'bal': 'balance'
+}
+
 # A list of the commands accepted by the bot. Every command
 # is essentially a function that maps a message to a reply.
 # For convenience, every command is associated with a help
@@ -540,13 +554,10 @@ Hi %s! Here's a list of the commands I understand:
 # 'commandName': ('commandFormat', 'helpDescription', 'command')
 COMMANDS = {
     'reference': ('reference', 'prints a command reference message.', process_reference),
-    'ref': ('ref', 'prints a command reference message.', process_reference),
     'help': ('help', 'prints a help message.', process_help),
-    'hlp': ('hlp', 'prints a help message.', process_help),
     'transfer': ('transfer AMOUNT BENEFICIARY', 'transfers `AMOUNT` to user `BENEFICIARY`\'s account.', process_transfer),
     'open': ('open', 'opens a new account.', process_open_account),
     'balance': ('balance', 'prints the balance on your account.', process_balance),
-    'bal': ('bal', 'prints the balance on your account.', process_balance),
     'add-public-key': (
         'add-public-key',
         'associates an ECC public key with your account. '

@@ -90,6 +90,15 @@ class CommandTests(unittest.TestCase):
             account_id = RedditAccountId('general-kenobi')
             run_command_stream(server, (account_id, 'reference'), (account_id, 'open'), (account_id, 'reference'))
 
+    def test_balance(self):
+        """Tests that the balance command works."""
+        for server in create_test_servers():
+            account_id = RedditAccountId('general-kenobi')
+            # Test the main command.
+            self.assertIn('0', ''.join(run_command_stream(server, (account_id, 'open'), (account_id, 'balance'))))
+            # Also test the alias.
+            self.assertIn('0', ''.join(run_command_stream(server, (account_id, 'bal'))))
+
     def test_authorize(self):
         """Tests that a user can be authorized as a citizen, admin or developer."""
         for server in create_test_servers():
