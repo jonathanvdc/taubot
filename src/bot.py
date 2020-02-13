@@ -106,7 +106,8 @@ if __name__ == '__main__':
         content = message.content.lstrip()
         prefixes = (
             '<@%s>' % discord_client.user.id,
-            '<@!%s>' % discord_client.user.id)
+            '<@!%s>' % discord_client.user.id,
+            'e!')
 
         if content.startswith(prefixes): # Checking all messages that start with the prefix.
             command_content = content[content.index('>') + 1:].lstrip()
