@@ -193,6 +193,18 @@ def process_authorization(author: AccountId, message: str, server: Server, **kwa
 
     beneficiary, auth_level = parsed
     beneficiary_account = assert_is_account(beneficiary, server)
+    if beneficiary_account.get_authorization().value > author_account.get_authorization().value:
+        raise CommandException(
+            'Cannot change authorization of account with authorization %s because it is higher than yours (%s).' % (
+                beneficiary_account.get_authorization(),
+                author_account.get_authorization()))
+
+    if auth_level.value > author_account.get_authorization().value:
+        raise CommandException(
+            'Cannot set authorization of account to %s because it is higher than yours (%s).' % (
+                auth_level,
+                author_account.get_authorization()))
+
     server.authorize(author_account, beneficiary_account, auth_level)
     return '%s now has authorization level %s.' % (beneficiary, auth_level.name)
 

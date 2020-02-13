@@ -104,7 +104,7 @@ class CommandTests(unittest.TestCase):
         for server in create_test_servers():
             admin_id = RedditAccountId('admin')
             admin = server.open_account(admin_id)
-            server.authorize(admin, admin, Authorization.ADMIN)
+            server.authorize(admin, admin, Authorization.DEVELOPER)
 
             account_id = RedditAccountId('general-kenobi')
             run_command_stream(server, (account_id, 'open'))
@@ -116,6 +116,36 @@ class CommandTests(unittest.TestCase):
             self.assertEqual(account.get_authorization(), Authorization.DEVELOPER)
             run_command_stream(server, (admin_id, 'authorize general-kenobi citizen'))
             self.assertEqual(account.get_authorization(), Authorization.CITIZEN)
+
+    def test_no_authorize_privilege_escalation(self):
+        """Tests that a user cannot escalate their privileges using the `authorize` command."""
+        for server in create_test_servers():
+            admin_id = RedditAccountId('admin')
+            admin = server.open_account(admin_id)
+            server.authorize(admin, admin, Authorization.DEVELOPER)
+
+            account_id = RedditAccountId('general-kenobi')
+            run_command_stream(server, (account_id, 'open'))
+            account = server.get_account(account_id)
+
+            self.assertEqual(account.get_authorization(), Authorization.CITIZEN)
+            run_command_stream(server, (account_id, 'authorize general-kenobi admin'))
+            self.assertEqual(account.get_authorization(), Authorization.CITIZEN)
+            run_command_stream(server, (account_id, 'authorize general-kenobi developer'))
+            self.assertEqual(account.get_authorization(), Authorization.CITIZEN)
+
+            run_command_stream(server, (admin_id, 'authorize general-kenobi admin'))
+
+            self.assertEqual(account.get_authorization(), Authorization.ADMIN)
+            run_command_stream(server, (account_id, 'authorize general-kenobi admin'))
+            self.assertEqual(account.get_authorization(), Authorization.ADMIN)
+            run_command_stream(server, (account_id, 'authorize general-kenobi developer'))
+            self.assertEqual(account.get_authorization(), Authorization.ADMIN)
+
+            run_command_stream(server, (account_id, 'authorize admin admin'))
+            self.assertEqual(admin.get_authorization(), Authorization.DEVELOPER)
+            run_command_stream(server, (account_id, 'authorize admin citizen'))
+            self.assertEqual(admin.get_authorization(), Authorization.DEVELOPER)
 
     def test_print_money(self):
         """Tests that money printing works."""
