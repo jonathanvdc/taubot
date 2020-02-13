@@ -110,7 +110,8 @@ if __name__ == '__main__':
             'e!')
 
         if content.startswith(prefixes): # Checking all messages that start with the prefix.
-            command_content = content[content.index('>') + 1:].lstrip()
+            prefix = [prefix for prefix in prefixes if content.startswith(prefix)][0]
+            command_content = content[len(prefix):].lstrip()
             response = discord_postprocess(
                 process_command(
                     DiscordAccountId(str(message.author.id)),
