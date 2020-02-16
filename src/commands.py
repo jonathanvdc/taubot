@@ -436,7 +436,7 @@ def process_add_alias(author: AccountId, message: str, server: Server, **kwargs)
 
     split_msg = message.split()
     if len(split_msg) != 3:
-        raise CommandException('Incorrect formatting. Expected `add-alias ALIASED_ACCOUNT ALIAS_REQUEST_CODE`.')
+        raise CommandException('Incorrect formatting. Expected format `add-alias ALIASED_ACCOUNT ALIAS_REQUEST_CODE`.')
 
     _, aliased_account_name, signature = split_msg
     aliased_account = assert_is_account(aliased_account_name, server)
@@ -447,6 +447,42 @@ def process_add_alias(author: AccountId, message: str, server: Server, **kwargs)
             aliased_account_name, author.readable())
     else:
         raise CommandException('Cannot set up alias because the signature is invalid.')
+
+def parse_admin_add_proxy_command(message):
+    """Parses a transfer command message."""
+    body = message.split()
+    if len(body) != 3:
+        return None
+
+    _, sender, destination = body
+
+    return (sender, destination)
+
+def process_admin_add_proxy(author: AccountId, message: str, server: Server, **kwargs):
+    """Processes an admin proxy addition command."""
+    assert_authorized(author, server, Authorization.ADMIN)
+    parsed = parse_admin_add_proxy_command(message)
+    if parsed is None:
+        raise CommandException('Incorrect formatting. Expected format `admin-add-proxy ACCOUNT_NAME PROXIED_ACCOUNT_NAME`.')
+
+    account_name, proxied_account_name = parsed
+    account = assert_is_account(account_name, server)
+    proxied_account = assert_is_account(proxied_account_name, server)
+    server.add_proxy(account, proxied_account)
+    return 'Account %s can now act as a proxy for account %s.' % (account_name, proxied_account_name)
+
+def process_admin_remove_proxy(author: AccountId, message: str, server: Server, **kwargs):
+    """Processes an admin proxy addition command."""
+    assert_authorized(author, server, Authorization.ADMIN)
+    parsed = parse_admin_add_proxy_command(message)
+    if parsed is None:
+        raise CommandException('Incorrect formatting. Expected format `admin-remove-proxy ACCOUNT_NAME PROXIED_ACCOUNT_NAME`.')
+
+    account_name, proxied_account_name = parsed
+    account = assert_is_account(account_name, server)
+    proxied_account = assert_is_account(proxied_account_name, server)
+    server.remove_proxy(account, proxied_account)
+    return 'Account %s can no longer act as a proxy for account %s.' % (account_name, proxied_account_name)
 
 def process_command(author: AccountId, message: str, server: Server, prefix=''):
     """Processes an arbitrary command."""
@@ -649,5 +685,15 @@ COMMANDS = {
         'admin-unfreeze ACCOUNT_NAME',
         'unfreezes the account with name `ACCOUNT_NAME`.',
         process_admin_unfreeze,
+        Authorization.ADMIN),
+    'admin-add-proxy': (
+        'admin-add-proxy ACCOUNT_NAME PROXIED_ACCOUNT_NAME',
+        'gives the account with name `ACCOUNT_NAME` proxy access to the account with name `PROXIED_ACCOUNT_NAME`.',
+        process_admin_add_proxy,
+        Authorization.ADMIN),
+    'admin-remove-proxy': (
+        'admin-remove-proxy ACCOUNT_NAME PROXIED_ACCOUNT_NAME',
+        'removes the account with name `ACCOUNT_NAME`\'s proxy access to the account with name `PROXIED_ACCOUNT_NAME`.',
+        process_admin_remove_proxy,
         Authorization.ADMIN)
 }

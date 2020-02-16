@@ -99,6 +99,21 @@ class CommandTests(unittest.TestCase):
             # Also test the alias.
             self.assertIn('0', ''.join(run_command_stream(server, (account_id, 'bal'))))
 
+    def test_balance_2(self):
+        """Tests that the balance command works."""
+        for server in create_test_servers():
+            admin_id = RedditAccountId('admin')
+            admin = server.open_account(admin_id)
+            server.authorize(admin, admin, Authorization.ADMIN)
+            server.print_money(admin, admin, 123)
+
+            self.assertIn(
+                '123',
+                ''.join(
+                    run_command_stream(
+                        server,
+                        (admin_id, 'balance'))))
+
     def test_authorize(self):
         """Tests that a user can be authorized as a citizen, admin or developer."""
         for server in create_test_servers():
@@ -174,21 +189,6 @@ class CommandTests(unittest.TestCase):
                 (admin_id, 'print-money -20 admin'))
 
             self.assertEqual(admin.get_balance(), 0)
-
-    def test_balance(self):
-        """Tests that the balance command works."""
-        for server in create_test_servers():
-            admin_id = RedditAccountId('admin')
-            admin = server.open_account(admin_id)
-            server.authorize(admin, admin, Authorization.ADMIN)
-            server.print_money(admin, admin, 123)
-
-            self.assertIn(
-                '123',
-                ''.join(
-                    run_command_stream(
-                        server,
-                        (admin_id, 'balance'))))
 
     def test_transfer(self):
         """Tests that money can be transferred."""
@@ -335,6 +335,31 @@ class CommandTests(unittest.TestCase):
             response = run_command_stream(server, (account_id, 'name'))[0]
             self.assertIn(str(account_id), response)
 
+    def test_add_remove_proxy(self):
+        """Tests that proxies can be added and removed."""
+        for server in create_test_servers():
+            admin_id = RedditAccountId('admin')
+            alias_id = RedditAccountId('general-kenobi')
+            admin = server.open_account(admin_id)
+            alias = server.open_account(alias_id)
+            server.authorize(admin, admin, Authorization.ADMIN)
+
+            # Make the account a proxy for the admin.
+            run_command_stream(server, (admin_id, 'admin-add-proxy general-kenobi admin'))[0]
+            self.assertIn(alias, admin.get_proxies())
+
+            # Remove the proxy.
+            run_command_stream(server, (admin_id, 'admin-remove-proxy general-kenobi admin'))[0]
+            self.assertNotIn(alias, admin.get_proxies())
+
+            # Ensure that proxies work like a set, not like a multiset.
+            run_command_stream(server, (admin_id, 'admin-add-proxy general-kenobi admin'))[0]
+            run_command_stream(server, (admin_id, 'admin-add-proxy general-kenobi admin'))[0]
+            run_command_stream(server, (admin_id, 'admin-add-proxy general-kenobi admin'))[0]
+            self.assertIn(alias, admin.get_proxies())
+
+            run_command_stream(server, (admin_id, 'admin-remove-proxy general-kenobi admin'))[0]
+            self.assertNotIn(alias, admin.get_proxies())
 
 if __name__ == '__main__':
     unittest.main()

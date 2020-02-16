@@ -111,6 +111,10 @@ class Account(object):
            of a PEM file describing an ECC key."""
         raise NotImplementedError()
 
+    def get_proxies(self):
+        """Gets all accounts that have been authorized as proxies for this account."""
+        raise NotImplementedError()
+
 
 class RecurringTransfer(object):
     """A recurring transfer."""
@@ -202,6 +206,16 @@ class Server(object):
 
     def add_public_key(self, account: Account, key):
         """Associates a public key with an account. The key must be an ECC key."""
+        raise NotImplementedError()
+
+    def add_proxy(self, account: Account, proxied_account: Account):
+        """Makes `account` a proxy for `proxied_account`."""
+        raise NotImplementedError()
+
+    def remove_proxy(self, account: Account, proxied_account: Account) -> bool:
+        """Ensures that `account` is not a proxy for `proxied_account`. Returns
+           `False` is `account` was not a proxy for `procied_account`;
+           otherwise, `True`."""
         raise NotImplementedError()
 
     def get_recurring_transfer(self, id: str) -> RecurringTransfer:
@@ -305,6 +319,20 @@ class InMemoryServer(Server):
         """Associates a public key with an account. The key must be an ECC key."""
         account.public_keys.append(key)
 
+    def add_proxy(self, account: Account, proxied_account: Account):
+        """Makes `account` a proxy for `proxied_account`."""
+        proxied_account.proxies.add(account)
+
+    def remove_proxy(self, account: Account, proxied_account: Account) -> bool:
+        """Ensures that `account` is not a proxy for `proxied_account`. Returns
+           `False` is `account` was not a proxy for `procied_account`;
+           otherwise, `True`."""
+        prev_in = account in proxied_account.proxies
+        if prev_in:
+            proxied_account.proxies.remove(account)
+
+        return not prev_in
+
     def print_money(self, author: Account, account: Account, amount: int):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
         account.balance += amount
@@ -377,6 +405,7 @@ class InMemoryAccount(Account):
         self.frozen = False
         self.auth = Authorization.CITIZEN
         self.public_keys = []
+        self.proxies = set()
 
     def get_uuid(self):
         """Gets this account's unique identifier."""
@@ -398,6 +427,10 @@ class InMemoryAccount(Account):
         """Produces a list of all public keys associated with this account.
            Every element of the list is an ECC key."""
         return self.public_keys
+
+    def get_proxies(self) -> List[Account]:
+        """Gets all accounts that have been authorized as proxies for this account."""
+        return list(self.proxies)
 
 
 class InMemoryRecurringTransfer(RecurringTransfer):
