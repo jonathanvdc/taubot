@@ -361,5 +361,58 @@ class CommandTests(unittest.TestCase):
             run_command_stream(server, (admin_id, 'admin-remove-proxy general-kenobi admin'))[0]
             self.assertNotIn(alias, admin.get_proxies())
 
+    def test_add_remove_proxy(self):
+        """Tests that proxies can be added and removed."""
+        for server in create_test_servers():
+            admin_id = RedditAccountId('admin')
+            alias_id = RedditAccountId('general-kenobi')
+            admin = server.open_account(admin_id)
+            alias = server.open_account(alias_id)
+            server.authorize(admin, admin, Authorization.ADMIN)
+
+            # Make the account a proxy for the admin.
+            run_command_stream(server, (admin_id, 'admin-add-proxy general-kenobi admin'))[0]
+            self.assertIn(alias, admin.get_proxies())
+
+            # Remove the proxy.
+            run_command_stream(server, (admin_id, 'admin-remove-proxy general-kenobi admin'))[0]
+            self.assertNotIn(alias, admin.get_proxies())
+
+            # Ensure that proxies work like a set, not like a multiset.
+            run_command_stream(server, (admin_id, 'admin-add-proxy general-kenobi admin'))[0]
+            run_command_stream(server, (admin_id, 'admin-add-proxy general-kenobi admin'))[0]
+            run_command_stream(server, (admin_id, 'admin-add-proxy general-kenobi admin'))[0]
+            self.assertIn(alias, admin.get_proxies())
+
+            run_command_stream(server, (admin_id, 'admin-remove-proxy general-kenobi admin'))[0]
+            self.assertNotIn(alias, admin.get_proxies())
+
+    def test_run_proxy_command(self):
+        for server in create_test_servers():
+            admin_id = RedditAccountId('admin')
+            alias_id = RedditAccountId('general-kenobi')
+            admin = server.open_account(admin_id)
+            alias = server.open_account(alias_id)
+            server.print_money(admin, admin, 200)
+            server.authorize(admin, admin, Authorization.ADMIN)
+
+            # Make the account a proxy for the admin.
+            run_command_stream(server, (admin_id, 'admin-add-proxy general-kenobi admin'))[0]
+            self.assertIn(alias, admin.get_proxies())
+
+            # Transfer money by proxy.
+            run_command_stream(server, (alias_id, 'proxy admin \n\n transfer 20 general-kenobi'))[0]
+            self.assertEqual(admin.get_balance(), 180)
+            self.assertEqual(alias.get_balance(), 20)
+
+            # Remove the proxy.
+            run_command_stream(server, (admin_id, 'admin-remove-proxy general-kenobi admin'))[0]
+            self.assertNotIn(alias, admin.get_proxies())
+
+            # Try to transfer money by proxy (this will fail and do nothing).
+            run_command_stream(server, (alias_id, 'proxy admin \n\n transfer 20 general-kenobi'))[0]
+            self.assertEqual(admin.get_balance(), 180)
+            self.assertEqual(alias.get_balance(), 20)
+
 if __name__ == '__main__':
     unittest.main()

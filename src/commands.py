@@ -329,18 +329,22 @@ def parse_proxy_command(message):
         command = command.strip('\n\r')
 
         proxy_elems = proxy_line.split()
-        if len(proxy_elems) != 4:
-            return None
+        if len(proxy_elems) == 2:
+            _, account_name = proxy_elems
+            return (parse_account_id(account_name), None, command)
 
-        _, protocol, account_name, enc_signature = proxy_elems
-        if protocol != 'dsa':
-            return None
+        elif len(proxy_elems) == 4:
+            _, protocol, account_name, enc_signature = proxy_elems
+            if protocol != 'dsa':
+                return None
 
-        return (parse_account_id(account_name), enc_signature, command)
+            return (parse_account_id(account_name), enc_signature, command)
+        else:
+            return None
 
     result = parse_impl()
     if result == None:
-        raise CommandException('Invalid formatting; expected `proxy dsa PROXIED_ACCOUNT SIGNATURE` followed by another command on the next line.')
+        raise CommandException('Invalid formatting; expected either `proxy PROXIED_ACCOUNT` or `proxy dsa PROXIED_ACCOUNT SIGNATURE` followed by another command on the next line.')
     else:
         return result
 
@@ -380,11 +384,19 @@ def is_signed_by(account: Account, message: str, base64_signature: str) -> bool:
 
 def process_proxy_command(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a command by proxy."""
-    account_name, signature, command = parse_proxy_command(message)
-    account = assert_is_account(account_name, server)
+    account_id, signature, command = parse_proxy_command(message)
+    account = assert_is_account(account_id, server)
 
-    if is_signed_by(account, command, signature):
-        return process_command(parse_account_id(account_name), command, server)
+    if signature is None:
+        author_account = assert_is_account(author, server)
+        if author_account in account.get_proxies():
+            return process_command(account_id, command, server)
+        else:
+            raise CommandException('Cannot execute command by proxy because %s is not an authorized proxy for %s.' % (author.readable(), account_id.readable()))
+
+    elif is_signed_by(account, command, signature):
+        return process_command(account_id, command, server)
+
     else:
         raise CommandException('Cannot execute command by proxy because the signature is invalid.')
 
@@ -617,8 +629,9 @@ COMMANDS = {
         'The public key should be encoded as the contents of a PEM file that is placed on a line after the command itself.',
         process_add_public_key),
     'proxy': (
-        'proxy dsa PROXIED_ACCOUNT SIGNATURE',
+        'proxy PROXIED_ACCOUNT -OR- proxy dsa PROXIED_ACCOUNT SIGNATURE',
         'makes `PROXIED_ACCOUNT` perform the action described in the remainder of the message (starting on the next line). '
+        'If you use the first form, then you need to be authorized as a proxy of `PROXIED_ACCOUNT.` If you use the second form, '
         '`SIGNATURE` must be an ECDSA-signed SHA3-512 hash of the remainder of the message, where the key that signs the '
         'message must have its public key associated with the proxied account. This command allows a user or application to '
         'safely perform actions on an account holder\'s behalf.',
