@@ -208,11 +208,11 @@ class Server(object):
         """Associates a public key with an account. The key must be an ECC key."""
         raise NotImplementedError()
 
-    def add_proxy(self, account: Account, proxied_account: Account):
+    def add_proxy(self, author: Account, account: Account, proxied_account: Account):
         """Makes `account` a proxy for `proxied_account`."""
         raise NotImplementedError()
 
-    def remove_proxy(self, account: Account, proxied_account: Account) -> bool:
+    def remove_proxy(self, author: Account, account: Account, proxied_account: Account) -> bool:
         """Ensures that `account` is not a proxy for `proxied_account`. Returns
            `False` is `account` was not a proxy for `procied_account`;
            otherwise, `True`."""
@@ -319,11 +319,11 @@ class InMemoryServer(Server):
         """Associates a public key with an account. The key must be an ECC key."""
         account.public_keys.append(key)
 
-    def add_proxy(self, account: Account, proxied_account: Account):
+    def add_proxy(self, author: Account, account: Account, proxied_account: Account):
         """Makes `account` a proxy for `proxied_account`."""
         proxied_account.proxies.add(account)
 
-    def remove_proxy(self, account: Account, proxied_account: Account) -> bool:
+    def remove_proxy(self, author: Account, account: Account, proxied_account: Account) -> bool:
         """Ensures that `account` is not a proxy for `proxied_account`. Returns
            `False` is `account` was not a proxy for `procied_account`;
            otherwise, `True`."""
@@ -632,6 +632,16 @@ class LedgerServer(InMemoryServer):
                 super().add_public_key(
                     self.get_account_from_string(elems[1]),
                     ECC.import_key(key))
+            elif cmd == 'add-proxy':
+                super().add_proxy(
+                    self.get_account_from_string(elems[1]),
+                    self.get_account_from_string(elems[2]),
+                    self.get_account_from_string(elems[3]))
+            elif cmd == 'remove-proxy':
+                super().remove_proxy(
+                    self.get_account_from_string(elems[1]),
+                    self.get_account_from_string(elems[2]),
+                    self.get_account_from_string(elems[3]))
             elif cmd == 'add-alias':
                 super().add_account_alias(
                     self.get_account_from_string(elems[1]),
@@ -693,6 +703,28 @@ class LedgerServer(InMemoryServer):
             'add-public-key',
             self.get_account_id(account),
             base64.b64encode(key.export_key(format='PEM').encode('utf-8')).decode('utf-8'))
+
+    def add_proxy(self, author: Account, account: Account, proxied_account: Account):
+        """Makes `account` a proxy for `proxied_account`."""
+        result = super().add_proxy(author, account, proxied_account)
+        self._ledger_write(
+            'add-proxy',
+            self.get_account_id(author),
+            self.get_account_id(account),
+            self.get_account_id(proxied_account))
+        return result
+
+    def remove_proxy(self, author: Account, account: Account, proxied_account: Account) -> bool:
+        """Ensures that `account` is not a proxy for `proxied_account`. Returns
+           `False` is `account` was not a proxy for `procied_account`;
+           otherwise, `True`."""
+        result = super().remove_proxy(author, account, proxied_account)
+        self._ledger_write(
+            'remove-proxy',
+            self.get_account_id(author),
+            self.get_account_id(account),
+            self.get_account_id(proxied_account))
+        return result
 
     def print_money(self, author, account, amount):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""

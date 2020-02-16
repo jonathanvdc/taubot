@@ -472,7 +472,7 @@ def parse_admin_add_proxy_command(message):
 
 def process_admin_add_proxy(author: AccountId, message: str, server: Server, **kwargs):
     """Processes an admin proxy addition command."""
-    assert_authorized(author, server, Authorization.ADMIN)
+    author_account = assert_authorized(author, server, Authorization.ADMIN)
     parsed = parse_admin_add_proxy_command(message)
     if parsed is None:
         raise CommandException('Incorrect formatting. Expected format `admin-add-proxy ACCOUNT_NAME PROXIED_ACCOUNT_NAME`.')
@@ -480,12 +480,12 @@ def process_admin_add_proxy(author: AccountId, message: str, server: Server, **k
     account_name, proxied_account_name = parsed
     account = assert_is_account(account_name, server)
     proxied_account = assert_is_account(proxied_account_name, server)
-    server.add_proxy(account, proxied_account)
+    server.add_proxy(author_account, account, proxied_account)
     return 'Account %s can now act as a proxy for account %s.' % (account_name, proxied_account_name)
 
 def process_admin_remove_proxy(author: AccountId, message: str, server: Server, **kwargs):
     """Processes an admin proxy addition command."""
-    assert_authorized(author, server, Authorization.ADMIN)
+    author_account = assert_authorized(author, server, Authorization.ADMIN)
     parsed = parse_admin_add_proxy_command(message)
     if parsed is None:
         raise CommandException('Incorrect formatting. Expected format `admin-remove-proxy ACCOUNT_NAME PROXIED_ACCOUNT_NAME`.')
@@ -493,7 +493,7 @@ def process_admin_remove_proxy(author: AccountId, message: str, server: Server, 
     account_name, proxied_account_name = parsed
     account = assert_is_account(account_name, server)
     proxied_account = assert_is_account(proxied_account_name, server)
-    server.remove_proxy(account, proxied_account)
+    server.remove_proxy(author_account, account, proxied_account)
     return 'Account %s can no longer act as a proxy for account %s.' % (account_name, proxied_account_name)
 
 def process_command(author: AccountId, message: str, server: Server, prefix=''):
