@@ -344,7 +344,7 @@ def parse_proxy_command(message):
 
     result = parse_impl()
     if result == None:
-        raise CommandException('Invalid formatting; expected either `proxy PROXIED_ACCOUNT` or `proxy dsa PROXIED_ACCOUNT SIGNATURE` followed by another command on the next line.')
+        raise CommandException('Invalid formatting; expected either `proxy PROXIED_ACCOUNT` or `proxy dsa PROXIED_ACCOUNT SIGNATURE` followed by another command on the next line. PROXIED_ACCOUNT is the name of your proxy account.')
     else:
         return result
 
