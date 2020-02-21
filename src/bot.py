@@ -5,6 +5,7 @@ import discord
 import json
 import time
 import asyncio
+import traceback
 from accounting import LedgerServer, Authorization, RedditAccountId, DiscordAccountId, AccountId
 from commands import COMMANDS, list_commands_as_markdown, CommandException, assert_authorized, process_command
 from utils import split_into_chunks, discord_postprocess
@@ -60,7 +61,10 @@ async def message_loop(reddit, server):
     """The bot's main Reddit message loop."""
     while True:
         # Process messages.
-        process_all_messages(reddit, server)
+        try:
+            process_all_messages(reddit, server)
+        except Exception:
+            traceback.print_exc()
 
         # Sleep for five seconds.
         await asyncio.sleep(5)
