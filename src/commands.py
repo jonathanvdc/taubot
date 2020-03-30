@@ -211,7 +211,10 @@ def process_authorization(author: AccountId, message: str, server: Server, **kwa
 def process_list_accounts(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a message requesting a list of all accounts."""
     return '\n'.join(['| Account | Balance |', '| --- | --- |'] + [
-        '| %s | %s |' % (' aka '.join(str(x) for x in server.get_account_ids(account)), account.get_balance())
+        '| %s%s | %s |' % (
+            '' if account.get_authorization() == Authorization.CITIZEN else '**%s** ' % account.get_authorization().name.lower(),
+            ' aka '.join(str(x) for x in server.get_account_ids(account)),
+            account.get_balance())
         for account in server.list_accounts()
     ])
 

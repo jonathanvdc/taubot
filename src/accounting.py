@@ -188,7 +188,7 @@ class Server(object):
         """Gets the main government account for this server."""
         raise NotImplementedError()
 
-    def list_accounts(self):
+    def list_accounts(self) -> List[Account]:
         """Lists all accounts on this server."""
         raise NotImplementedError()
 
