@@ -513,10 +513,10 @@ def has_leading_zeros(hexdigest, zero_count):
 
     return True
 
-def create_initial_ledger_entries(entries, leading_zero_count=12):
+def create_initial_ledger_entries(entries, leading_zero_count=12, initial_hash=b''):
     """Creates an initial ledger by annotating hashless ledger entries with hashes and salts.
        `entries` is a list of unannotated ledger lines. A modified list of ledger lines is returned."""
-    last_hash = b''
+    last_hash = initial_hash
     results = []
     for line in entries:
         elems = line.split()
@@ -526,14 +526,14 @@ def create_initial_ledger_entries(entries, leading_zero_count=12):
 
     return results
 
-def create_initial_ledger(unannotated_ledger_path, result_path, leading_zero_count=12):
+def create_initial_ledger(unannotated_ledger_path, result_path, leading_zero_count=12, initial_hash=b''):
     """Creates an initial ledger by reading the unannotated ledger at `unannoted_ledger_path`,
        annotating every line with a hash and a salt and then writing the result to
        `result_path`."""
     with open(unannotated_ledger_path, 'r') as f:
         lines = f.readlines()
 
-    lines = create_initial_ledger_entries(lines, leading_zero_count)
+    lines = create_initial_ledger_entries(lines, leading_zero_count, initial_hash)
 
     with open(result_path, 'w') as f:
         f.writelines(line + '\n' for line in lines)
