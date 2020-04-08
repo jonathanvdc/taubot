@@ -111,6 +111,10 @@ class Account(object):
            of a PEM file describing an ECC key."""
         raise NotImplementedError()
 
+    def get_proxies(self):
+        """Gets all accounts that have been authorized as proxies for this account."""
+        raise NotImplementedError()
+
 
 class RecurringTransfer(object):
     """A recurring transfer."""
@@ -184,12 +188,16 @@ class Server(object):
         """Gets the main government account for this server."""
         raise NotImplementedError()
 
-    def list_accounts(self):
+    def list_accounts(self) -> List[Account]:
         """Lists all accounts on this server."""
         raise NotImplementedError()
 
     def authorize(self, author: Account, account: Account, auth_level: Authorization):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
+        raise NotImplementedError()
+
+    def set_frozen(self, author: Account, account: Account, is_frozen: bool):
+        """Freezes or unfreezes `account` on the authority of `author`."""
         raise NotImplementedError()
 
     def print_money(self, author: Account, account: Account, amount: int):
@@ -198,6 +206,16 @@ class Server(object):
 
     def add_public_key(self, account: Account, key):
         """Associates a public key with an account. The key must be an ECC key."""
+        raise NotImplementedError()
+
+    def add_proxy(self, author: Account, account: Account, proxied_account: Account):
+        """Makes `account` a proxy for `proxied_account`."""
+        raise NotImplementedError()
+
+    def remove_proxy(self, author: Account, account: Account, proxied_account: Account) -> bool:
+        """Ensures that `account` is not a proxy for `proxied_account`. Returns
+           `False` is `account` was not a proxy for `procied_account`;
+           otherwise, `True`."""
         raise NotImplementedError()
 
     def get_recurring_transfer(self, id: str) -> RecurringTransfer:
@@ -221,7 +239,7 @@ class Server(object):
            is a server-defined timespan."""
         raise NotImplementedError()
 
-    def notify_tick_elapsed(self):
+    def notify_tick_elapsed(self, tick_timestamp=None):
         """Notifies the server that a tick has elapsed."""
         raise NotImplementedError()
 
@@ -268,7 +286,7 @@ class InMemoryServer(Server):
         self.accounts[alias_id] = account
         self.inv_accounts[account].append(alias_id)
 
-    def get_account(self, id: AccountId):
+    def get_account(self, id: AccountId) -> Account:
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         return self.accounts[id]
 
@@ -286,15 +304,34 @@ class InMemoryServer(Server):
 
     def list_accounts(self):
         """Lists all accounts on this server."""
-        return self.accounts.values()
+        unique_accounts = set(self.accounts.values())
+        return sorted(unique_accounts, key=lambda account: str(self.get_account_id(account)))
 
     def authorize(self, author: Account, account: Account, auth_level: Authorization):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
         account.auth = auth_level
 
+    def set_frozen(self, author: Account, account: Account, is_frozen: bool):
+        """Freezes or unfreezes `account` on the authority of `author`."""
+        account.frozen = is_frozen
+
     def add_public_key(self, account: Account, key):
         """Associates a public key with an account. The key must be an ECC key."""
         account.public_keys.append(key)
+
+    def add_proxy(self, author: Account, account: Account, proxied_account: Account):
+        """Makes `account` a proxy for `proxied_account`."""
+        proxied_account.proxies.add(account)
+
+    def remove_proxy(self, author: Account, account: Account, proxied_account: Account) -> bool:
+        """Ensures that `account` is not a proxy for `proxied_account`. Returns
+           `False` is `account` was not a proxy for `procied_account`;
+           otherwise, `True`."""
+        prev_in = account in proxied_account.proxies
+        if prev_in:
+            proxied_account.proxies.remove(account)
+
+        return not prev_in
 
     def print_money(self, author: Account, account: Account, amount: int):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
@@ -327,7 +364,7 @@ class InMemoryServer(Server):
         self.recurring_transfers[rec_transfer.get_id()] = rec_transfer
         return rec_transfer
 
-    def notify_tick_elapsed(self):
+    def notify_tick_elapsed(self, tick_timestamp=None):
         """Notifies the server that a tick has elapsed."""
         finished_transfers = set()
         for id in self.recurring_transfers:
@@ -368,6 +405,7 @@ class InMemoryAccount(Account):
         self.frozen = False
         self.auth = Authorization.CITIZEN
         self.public_keys = []
+        self.proxies = set()
 
     def get_uuid(self):
         """Gets this account's unique identifier."""
@@ -389,6 +427,10 @@ class InMemoryAccount(Account):
         """Produces a list of all public keys associated with this account.
            Every element of the list is an ECC key."""
         return self.public_keys
+
+    def get_proxies(self) -> List[Account]:
+        """Gets all accounts that have been authorized as proxies for this account."""
+        return list(self.proxies)
 
 
 class InMemoryRecurringTransfer(RecurringTransfer):
@@ -471,10 +513,10 @@ def has_leading_zeros(hexdigest, zero_count):
 
     return True
 
-def create_initial_ledger_entries(entries, leading_zero_count=12):
+def create_initial_ledger_entries(entries, leading_zero_count=12, initial_hash=b''):
     """Creates an initial ledger by annotating hashless ledger entries with hashes and salts.
        `entries` is a list of unannotated ledger lines. A modified list of ledger lines is returned."""
-    last_hash = b''
+    last_hash = initial_hash
     results = []
     for line in entries:
         elems = line.split()
@@ -484,14 +526,14 @@ def create_initial_ledger_entries(entries, leading_zero_count=12):
 
     return results
 
-def create_initial_ledger(unannotated_ledger_path, result_path, leading_zero_count=12):
+def create_initial_ledger(unannotated_ledger_path, result_path, leading_zero_count=12, initial_hash=b''):
     """Creates an initial ledger by reading the unannotated ledger at `unannoted_ledger_path`,
        annotating every line with a hash and a salt and then writing the result to
        `result_path`."""
     with open(unannotated_ledger_path, 'r') as f:
         lines = f.readlines()
 
-    lines = create_initial_ledger_entries(lines, leading_zero_count)
+    lines = create_initial_ledger_entries(lines, leading_zero_count, initial_hash)
 
     with open(result_path, 'w') as f:
         f.writelines(line + '\n' for line in lines)
@@ -506,6 +548,7 @@ class LedgerServer(InMemoryServer):
         super().__init__()
         self.last_tick_timestamp = time.time()
         self.last_hash = b''
+        self.ledger_path = ledger_path
         self.leading_zero_count = leading_zero_count
         if os.path.isfile(ledger_path):
             self._read_ledger(ledger_path)
@@ -515,12 +558,17 @@ class LedgerServer(InMemoryServer):
         return self
 
     def __exit__(self, type, value, traceback):
+        self.close()
+
+    def close(self):
+        """Closes the server's underlying ledger file."""
         self.ledger_file.close()
 
     def _read_ledger(self, ledger_path):
         """Reads a ledger at a particular path."""
         with open(ledger_path, 'r') as f:
             lines = f.readlines()
+            f.close()
 
         for line_num, line in enumerate(lines):
             if line.isspace() or line == '':
@@ -557,6 +605,11 @@ class LedgerServer(InMemoryServer):
                     self.get_account_from_string(elems[1]),
                     self.get_account_from_string(elems[2]),
                     Authorization[elems[3]])
+            elif cmd == 'set-frozen':
+                super().set_frozen(
+                    self.get_account_from_string(elems[1]),
+                    self.get_account_from_string(elems[2]),
+                    elems[3] == 'True')
             elif cmd == 'print-money':
                 super().print_money(
                     self.get_account_from_string(elems[1]),
@@ -579,6 +632,16 @@ class LedgerServer(InMemoryServer):
                 super().add_public_key(
                     self.get_account_from_string(elems[1]),
                     ECC.import_key(key))
+            elif cmd == 'add-proxy':
+                super().add_proxy(
+                    self.get_account_from_string(elems[1]),
+                    self.get_account_from_string(elems[2]),
+                    self.get_account_from_string(elems[3]))
+            elif cmd == 'remove-proxy':
+                super().remove_proxy(
+                    self.get_account_from_string(elems[1]),
+                    self.get_account_from_string(elems[2]),
+                    self.get_account_from_string(elems[3]))
             elif cmd == 'add-alias':
                 super().add_account_alias(
                     self.get_account_from_string(elems[1]),
@@ -588,12 +651,14 @@ class LedgerServer(InMemoryServer):
             else:
                 raise Exception("Unknown ledger command '%s'." % cmd)
 
-    def _ledger_write(self, *args):
-        t = time.time()
+    def _ledger_write(self, *args, t=None):
+        if t is None:
+            t = time.time()
         elems = [str(t)] + list(map(str, args))
         salt, new_hash = generate_salt_and_hash(self.last_hash, elems, self.leading_zero_count)
-        self.ledger_file.writelines(
-            ' '.join([new_hash.hexdigest(), salt] + elems) + '\n')
+        with open(self.ledger_path, 'a') as f:
+            f.writelines(' '.join([new_hash.hexdigest(), salt] + elems) + '\n')
+            f.close()
         self.last_hash = new_hash.digest()
         return t
 
@@ -622,6 +687,15 @@ class LedgerServer(InMemoryServer):
             auth_level.name)
         return result
 
+    def set_frozen(self, author: Account, account: Account, is_frozen: bool):
+        """Freezes or unfreezes `account` on the authority of `author`."""
+        super().set_frozen(author, account, is_frozen)
+        self._ledger_write(
+            'set-frozen',
+            self.get_account_id(author),
+            self.get_account_id(account),
+            is_frozen)
+
     def add_public_key(self, account, key):
         """Associates a public key with an account. The key must be an ECC key."""
         super().add_public_key(account, key)
@@ -629,6 +703,28 @@ class LedgerServer(InMemoryServer):
             'add-public-key',
             self.get_account_id(account),
             base64.b64encode(key.export_key(format='PEM').encode('utf-8')).decode('utf-8'))
+
+    def add_proxy(self, author: Account, account: Account, proxied_account: Account):
+        """Makes `account` a proxy for `proxied_account`."""
+        result = super().add_proxy(author, account, proxied_account)
+        self._ledger_write(
+            'add-proxy',
+            self.get_account_id(author),
+            self.get_account_id(account),
+            self.get_account_id(proxied_account))
+        return result
+
+    def remove_proxy(self, author: Account, account: Account, proxied_account: Account) -> bool:
+        """Ensures that `account` is not a proxy for `proxied_account`. Returns
+           `False` is `account` was not a proxy for `procied_account`;
+           otherwise, `True`."""
+        result = super().remove_proxy(author, account, proxied_account)
+        self._ledger_write(
+            'remove-proxy',
+            self.get_account_id(author),
+            self.get_account_id(account),
+            self.get_account_id(proxied_account))
+        return result
 
     def print_money(self, author, account, amount):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
@@ -643,7 +739,7 @@ class LedgerServer(InMemoryServer):
         """Transfers a particular amount of money from one account on this server to another on
            the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
            This action must not complete successfully if the transfer cannot be performed."""
-        result = super().transfer(source, author, destination, amount)
+        result = super().transfer(author, source, destination, amount)
         self._ledger_write(
             'transfer',
             self.get_account_id(author),
@@ -652,10 +748,10 @@ class LedgerServer(InMemoryServer):
             amount)
         return result
 
-    def notify_tick_elapsed(self):
+    def notify_tick_elapsed(self, tick_timestamp=None):
         """Notifies the server that a tick has elapsed."""
         super().notify_tick_elapsed()
-        self.last_tick_timestamp = self._ledger_write('tick')
+        self.last_tick_timestamp = self._ledger_write('tick', t=tick_timestamp)
 
     def create_recurring_transfer(self, author, source, destination, total_amount, tick_count, transfer_id=None):
         """Creates and registers a new recurring transfer, i.e., a transfer that is spread out over
@@ -697,7 +793,7 @@ class BackendServer(Server):
            already exists. Otherwise returns the newly opened account."""
         return BackendCitizenAccount(self.server_id, backend.add_account(id, id, self.server_id, True))
 
-    def get_account(self, id):
+    def get_account(self, id) -> Account:
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         return BackendCitizenAccount(self.server_id, id)
 

@@ -1,11 +1,11 @@
 # This module defines logic for processing bot commands.
 import base64
 from typing import Union
-from accounting import Authorization, Account, AccountId, Server, parse_account_id
+from accounting import Authorization, Account, AccountId, Server, parse_account_id, RedditAccountId, DiscordAccountId
 from Crypto.PublicKey import ECC
 from Crypto.Signature import DSS
 from Crypto.Hash import SHA3_512
-
+from random import choice, randint
 
 class CommandException(Exception):
     """The type of exception that is thrown when a command fails."""
@@ -25,7 +25,7 @@ def parse_transfer_command(message):
 
     return (amount, destination)
 
-def process_transfer(author: AccountId, message: str, server: Server):
+def process_transfer(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a transfer command."""
     parse_result = parse_transfer_command(message)
 
@@ -51,7 +51,7 @@ def parse_admin_transfer_command(message):
 
     return (sender, amount, destination)
 
-def process_admin_transfer(author: AccountId, message: str, server: Server):
+def process_admin_transfer(author: AccountId, message: str, server: Server, **kwargs):
     """Processes an admin transfer command."""
     assert_authorized(author, server, Authorization.ADMIN)
     parse_result = parse_admin_transfer_command(message)
@@ -80,31 +80,51 @@ def perform_transfer(author_name, sender_name, destination_name, amount, server)
     proof_string = ' Proof: %s.' % proof if proof is not None else ''
     return 'Transfer performed successfully.%s' % proof_string
 
-def process_open_account(author: AccountId, message: str, server: Server):
+def process_open_account(author: AccountId, message: str, server: Server, prefix='', platform_name='Reddit', **kwargs):
     """Processes a message that tries to open a new account."""
     if server.has_account(author):
         return 'Hi there %s. Looks like you already have an account. No need to open another one.' % author.readable()
 
     server.open_account(author)
-    return 'Hi there %s. Your account has been opened successfully. Thank you for your business.' % author.readable()
+    return 'Hi there %s. Your account has been opened successfully. Thank you for your business. %s' % (author.readable(), get_generic_help_message(author, prefix, platform_name))
 
-def process_admin_open_account(author: AccountId, message: str, server: Server):
-    """Processes a message that tries to open a new account."""
-    assert_authorized(author, server, Authorization.ADMIN)
+def parse_account_name_command(message: str) -> str:
+    """Parses a command that has a single parameter: an account name."""
     body = message.split()
     if len(body) != 2:
         raise CommandException(
-            'Incorrectly formatted command; expected `admin-open ACCOUNT_NAME`, '
-            'where `ACCOUNT_NAME` is the name of the account to create.')
+            'Incorrectly formatted command; expected `%s ACCOUNT_NAME`.' % body[0])
+    return body[1]
 
-    account_name = parse_account_id(body[1])
+def process_admin_open_account(author: AccountId, message: str, server: Server, **kwargs):
+    """Processes a message that tries to open a new account."""
+    assert_authorized(author, server, Authorization.ADMIN)
+    account_name = parse_account_name_command(message)
     if server.has_account(account_name):
         raise CommandException('Account `%s` already exists.' % account_name)
 
     server.open_account(account_name)
     return 'Account `%s` has been opened successfully.' % account_name
 
-def process_balance(author: AccountId, message: str, server: Server):
+def process_admin_freeze(author: AccountId, message: str, server: Server, **kwargs):
+    """Processes a message that freezes an account."""
+    author_account = assert_authorized(author, server, Authorization.ADMIN)
+    account_name = parse_account_name_command(message)
+    account = assert_is_account(account_name, server)
+
+    server.set_frozen(author_account, account, True)
+    return 'Account %s was frozen successfully.' % account_name
+
+def process_admin_unfreeze(author: AccountId, message: str, server: Server, **kwargs):
+    """Processes a message that unfreezes an account."""
+    author_account = assert_authorized(author, server, Authorization.ADMIN)
+    account_name = parse_account_name_command(message)
+    account = assert_is_account(account_name, server)
+
+    server.set_frozen(author_account, account, False)
+    return 'Account %s was unfrozen successfully.' % account_name
+
+def process_balance(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a message requesting the balance on an account."""
     if not server.has_account(author):
         return 'Hi there %s. I can\'t tell you what the balance on your account is because you don\'t have an account yet. ' \
@@ -114,7 +134,7 @@ def process_balance(author: AccountId, message: str, server: Server):
     main_response = 'The balance on your account is %s.' % account.get_balance()
     return 'Hi there %s %s. %s Have a great day.' % (account.get_authorization().name.lower(), author.readable(), main_response)
 
-def process_add_public_key(author: AccountId, message: str, server: Server):
+def process_add_public_key(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a message that requests for a public key to be associated with an account."""
     account = assert_is_account(author, server)
     pem = '\n'.join(line for line in message.split('\n')[1:] if line != '' and not line.isspace())
@@ -133,18 +153,21 @@ def assert_is_account(account_name: Union[str, AccountId], server: Server) -> Ac
 
     if not server.has_account(account_name):
         raise CommandException(
-            ('Sorry, I can\'t process your request because `%s` does not have an account yet. '
-             'Accounts can be opened using the `open` command.') % account_name)
+            ('Sorry, I can\'t process your request because %s does not have an account yet. '
+             'Accounts can be opened using the `open` command.') % account_name.readable())
 
     return server.get_account(account_name)
 
 def assert_authorized(account_name: Union[str, AccountId], server: Server, auth_level: Authorization) -> Account:
     """Asserts that a particular account exists and has an authorization level that is at least `auth_level`.
        Returns the account."""
+    if isinstance(account_name, str):
+        account_name = parse_account_id(account_name)
+
     account = assert_is_account(account_name, server)
 
     if account.get_authorization().value < auth_level.value:
-        raise CommandException('Sorry, I can\'t process your request because `%s` does not have the required authorization.' % account_name)
+        raise CommandException('Sorry, I can\'t process your request because %s does not have the required authorization.' % account_name.readable())
 
     return account
 
@@ -161,7 +184,7 @@ def parse_authorization(message):
     except KeyError:
         return None
 
-def process_authorization(author: AccountId, message: str, server: Server):
+def process_authorization(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a message requesting an authorization change."""
     author_account = assert_authorized(author, server, Authorization.ADMIN)
     parsed = parse_authorization(message)
@@ -170,13 +193,28 @@ def process_authorization(author: AccountId, message: str, server: Server):
 
     beneficiary, auth_level = parsed
     beneficiary_account = assert_is_account(beneficiary, server)
+    if beneficiary_account.get_authorization().value > author_account.get_authorization().value:
+        raise CommandException(
+            'Cannot change authorization of account with authorization %s because it is higher than yours (%s).' % (
+                beneficiary_account.get_authorization(),
+                author_account.get_authorization()))
+
+    if auth_level.value > author_account.get_authorization().value:
+        raise CommandException(
+            'Cannot set authorization of account to %s because it is higher than yours (%s).' % (
+                auth_level,
+                author_account.get_authorization()))
+
     server.authorize(author_account, beneficiary_account, auth_level)
     return '%s now has authorization level %s.' % (beneficiary, auth_level.name)
 
-def process_list_accounts(author: AccountId, message: str, server: Server):
+def process_list_accounts(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a message requesting a list of all accounts."""
     return '\n'.join(['| Account | Balance |', '| --- | --- |'] + [
-        '| %s | %s |' % (' aka '.join(str(x) for x in server.get_account_ids(account)), account.get_balance())
+        '| %s%s | %s |' % (
+            '' if account.get_authorization() == Authorization.CITIZEN else '**%s** ' % account.get_authorization().name.lower(),
+            ' aka '.join(str(x) for x in server.get_account_ids(account)),
+            account.get_balance())
         for account in server.list_accounts()
     ])
 
@@ -191,10 +229,10 @@ def parse_print_money(message):
         amount = int(amount_text)
     except ValueError:
         return None
-    
+
     return (amount, parse_account_id(beneficiary))
 
-def process_print_money(author: AccountId, message: str, server: Server):
+def process_print_money(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a request to print a batch of money and deposit it in an account."""
     author_account = assert_authorized(author, server, Authorization.ADMIN)
     parsed = parse_print_money(message)
@@ -202,8 +240,13 @@ def process_print_money(author: AccountId, message: str, server: Server):
         raise CommandException('Command formatted incorrectly. Expected format `print-money AMOUNT BENEFICIARY`.')
 
     amount, beneficiary = parsed
+    if amount < 0:
+        raise CommandException('Cannot print negative amounts of money.')
+
     beneficiary_account = assert_is_account(beneficiary, server)
-    server.print_money(author_account, beneficiary_account, amount)
+    if amount != 0:
+        server.print_money(author_account, beneficiary_account, amount)
+
     return 'Money printed successfully.'
 
 def parse_admin_create_recurring_transfer(message):
@@ -221,7 +264,7 @@ def parse_admin_create_recurring_transfer(message):
 
     return (amount, parse_account_id(sender), parse_account_id(destination), tick_count)
 
-def process_admin_create_recurring_transfer(author: AccountId, message: str, server: Server):
+def process_admin_create_recurring_transfer(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a request to set up an arbitrary recurring transfer."""
     assert_authorized(author, server, Authorization.ADMIN)
     parse_result = parse_admin_create_recurring_transfer(message)
@@ -243,6 +286,41 @@ def process_admin_create_recurring_transfer(author: AccountId, message: str, ser
         tick_count)
     return 'Recurring transfer set up with ID `%s`.' % transfer.get_id()
 
+def parse_create_recurring_transfer(message):
+    """Parses a create-recurring-transfer message."""
+    body = message.split()
+    if len(body) != 4:
+        return None
+
+    _, amount_text, destination, tick_count_text = body
+    try:
+        amount = int(amount_text)
+        tick_count = int(tick_count_text)
+    except ValueError:
+        return None
+
+    return (amount, parse_account_id(destination), tick_count)
+
+def process_create_recurring_transfer(author: AccountId, message: str, server: Server, **kwargs):
+    """Processes a request to set up a recurring transfer."""
+    parse_result = parse_create_recurring_transfer(message)
+
+    if parse_result is None:
+        return 'Request formatted incorrectly. Expected `create-recurring-transfer AMOUNT_PER_TICK BENEFICIARY TICK_COUNT`.'
+
+    amount, destination_name, tick_count = parse_result
+
+    author_account = assert_is_account(author, server)
+    dest_account = assert_is_account(destination_name, server)
+
+    transfer = server.create_recurring_transfer(
+        author_account,
+        author_account,
+        dest_account,
+        amount * tick_count,
+        tick_count)
+    return 'Recurring transfer set up with ID `%s`.' % transfer.get_id()
+
 def parse_proxy_command(message):
     """Parses a proxy command into its components."""
     def parse_impl():
@@ -254,18 +332,22 @@ def parse_proxy_command(message):
         command = command.strip('\n\r')
 
         proxy_elems = proxy_line.split()
-        if len(proxy_elems) != 4:
-            return None
+        if len(proxy_elems) == 2:
+            _, account_name = proxy_elems
+            return (parse_account_id(account_name), None, command)
 
-        _, protocol, account_name, enc_signature = proxy_elems
-        if protocol != 'dsa':
-            return None
+        elif len(proxy_elems) == 4:
+            _, protocol, account_name, enc_signature = proxy_elems
+            if protocol != 'dsa':
+                return None
 
-        return (parse_account_id(account_name), enc_signature, command)
+            return (parse_account_id(account_name), enc_signature, command)
+        else:
+            return None
 
     result = parse_impl()
     if result == None:
-        raise CommandException('Invalid formatting; expected `proxy dsa PROXIED_ACCOUNT SIGNATURE` followed by another command on the next line.')
+        raise CommandException('Invalid formatting; expected either `proxy PROXIED_ACCOUNT` or `proxy dsa PROXIED_ACCOUNT SIGNATURE` followed by another command on the next line.')
     else:
         return result
 
@@ -303,21 +385,29 @@ def is_signed_by(account: Account, message: str, base64_signature: str) -> bool:
 
     return any_verified
 
-def process_proxy_command(author: AccountId, message: str, server: Server):
+def process_proxy_command(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a command by proxy."""
-    account_name, signature, command = parse_proxy_command(message)
-    account = assert_is_account(account_name, server)
+    account_id, signature, command = parse_proxy_command(message)
+    account = assert_is_account(account_id, server)
 
-    if is_signed_by(account, command, signature):
-        return process_command(parse_account_id(account_name), command, server)
+    if signature is None:
+        author_account = assert_is_account(author, server)
+        if author_account in account.get_proxies():
+            return process_command(account_id, command, server)
+        else:
+            raise CommandException('Cannot execute command by proxy because %s is not an authorized proxy for %s.' % (author.readable(), account_id.readable()))
+
+    elif is_signed_by(account, command, signature):
+        return process_command(account_id, command, server)
+
     else:
         raise CommandException('Cannot execute command by proxy because the signature is invalid.')
 
-def process_name(author: AccountId, message: str, server: Server):
+def process_name(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a request for an account name."""
     return 'Hello there %s. Your local account ID is `%s`.' % (author.readable(), str(author))
 
-def process_request_alias(author: AccountId, message: str, server: Server):
+def process_request_alias(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a request for an alias code."""
     account = assert_is_account(author, server)
 
@@ -341,11 +431,19 @@ def process_request_alias(author: AccountId, message: str, server: Server):
 
     # At this point we will allow the private key to be forgotten.
 
-    return ('Your alias request code for account {0} can be found below. '
-        'Make {0} an alias for this account ({2}) using the `add-alias` command.\n\n```\n{1}\n```').format(
-            str(alias_id), signature, author.readable())
+    # Compose a helpful message for as to how the bot can be contacted to link accounts.
+    if isinstance(alias_id, RedditAccountId):
+        contact_message = 'Send me that exact command as a Reddit Private Message (not a direct chat) from %s.' % alias_id.readable()
+    elif isinstance(alias_id, DiscordAccountId):
+        contact_message = 'Send me that exact command prefixed with a mention of my name via Discord from account %s.' % alias_id
+    else:
+        contact_message = ''
 
-def process_add_alias(author: AccountId, message: str, server: Server):
+    return ('I created an alias request code for you. '
+        'Make {0} an alias for this account ({2}) by sending me the following message from {3}.\n\n```\nadd-alias {4} {1}\n```\n\n{5}').format(
+            str(alias_id), signature, author.readable(), alias_id.readable(), str(author), contact_message)
+
+def process_add_alias(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a request to add `author` as an alias to an account."""
     if server.has_account(author):
         raise CommandException(
@@ -353,36 +451,78 @@ def process_add_alias(author: AccountId, message: str, server: Server):
 
     split_msg = message.split()
     if len(split_msg) != 3:
-        raise CommandException('Incorrect formatting. Expected `add-alias ALIASED_ACCOUNT ALIAS_REQUEST_CODE`.')
+        raise CommandException('Incorrect formatting. Expected format `add-alias ALIASED_ACCOUNT ALIAS_REQUEST_CODE`.')
 
     _, aliased_account_name, signature = split_msg
     aliased_account = assert_is_account(aliased_account_name, server)
 
     if is_signed_by(aliased_account, str(author), signature):
         server.add_account_alias(aliased_account, author)
-        return 'Alias set up sucessfully. %s and %s now refer to the same account.' % (
+        return 'Alias set up successfully. %s and %s now refer to the same account.' % (
             aliased_account_name, author.readable())
     else:
         raise CommandException('Cannot set up alias because the signature is invalid.')
 
-def process_command(author: AccountId, message: str, server: Server):
+def parse_admin_add_proxy_command(message):
+    """Parses a transfer command message."""
+    body = message.split()
+    if len(body) != 3:
+        return None
+
+    _, sender, destination = body
+
+    return (sender, destination)
+
+def process_admin_add_proxy(author: AccountId, message: str, server: Server, **kwargs):
+    """Processes an admin proxy addition command."""
+    author_account = assert_authorized(author, server, Authorization.ADMIN)
+    parsed = parse_admin_add_proxy_command(message)
+    if parsed is None:
+        raise CommandException('Incorrect formatting. Expected format `admin-add-proxy ACCOUNT_NAME PROXIED_ACCOUNT_NAME`.')
+
+    account_name, proxied_account_name = parsed
+    account = assert_is_account(account_name, server)
+    proxied_account = assert_is_account(proxied_account_name, server)
+    server.add_proxy(author_account, account, proxied_account)
+    return 'Account %s can now act as a proxy for account %s.' % (account_name, proxied_account_name)
+
+def process_admin_remove_proxy(author: AccountId, message: str, server: Server, **kwargs):
+    """Processes an admin proxy addition command."""
+    author_account = assert_authorized(author, server, Authorization.ADMIN)
+    parsed = parse_admin_add_proxy_command(message)
+    if parsed is None:
+        raise CommandException('Incorrect formatting. Expected format `admin-remove-proxy ACCOUNT_NAME PROXIED_ACCOUNT_NAME`.')
+
+    account_name, proxied_account_name = parsed
+    account = assert_is_account(account_name, server)
+    proxied_account = assert_is_account(proxied_account_name, server)
+    server.remove_proxy(author_account, account, proxied_account)
+    return 'Account %s can no longer act as a proxy for account %s.' % (account_name, proxied_account_name)
+
+def process_command(author: AccountId, message: str, server: Server, prefix=''):
     """Processes an arbitrary command."""
     split_msg = message.split()
     if len(split_msg) == 0:
         return 'Hi %s! You sent me an empty message. Here\'s a list of commands I do understand:\n\n%s' % (
             author.readable(), list_commands_as_markdown(author, server))
-    elif split_msg[0] in COMMANDS:
+
+    # Expand aliases if necessary.
+    while split_msg[0] in ALIASES:
+        split_msg[0] = ALIASES[split_msg[0]]
+
+    if split_msg[0] in COMMANDS:
         try:
             cmd = COMMANDS[split_msg[0]]
             if len(cmd) >= 4 and cmd[3].value > Authorization.CITIZEN.value:
                 assert_authorized(author, server, cmd[3])
 
-            return cmd[2](author, message, server)
+            platform_name = 'Discord' if isinstance(author, DiscordAccountId) else 'Reddit'
+            return cmd[2](author, message, server, prefix=prefix, platform_name=platform_name)
         except CommandException as e:
             return str(e)
     else:
         return 'Hi %s! I didn\'t quite understand command your command `%s`. Here\'s a list of commands I do understand:\n\n%s' % (
-            author.readable(), split_msg[0], list_commands_as_markdown(author, server))
+            author.readable(), split_msg[0], list_commands_as_markdown(author, server)) # Sends the help message.
 
 def list_commands(author: AccountId, server: Server):
     """Creates a list of all commands accepted by this bot."""
@@ -402,18 +542,86 @@ def list_commands_as_markdown(author: AccountId, server: Server):
     """Creates a list of all commands accepted by this bot and formats it as Markdown."""
     return '\n'.join('  * %s' % item for item in list_commands(author, server))
 
-def process_help(author: AccountId, message: str, server: Server):
+PLATFORMS = {
+    'Discord': {
+        'reach_how': 'by pinging me at the start of a message'
+    },
+    'Reddit': {
+        'reach_how': 'by sending me a private message (I ignore the subject, only the body matters); only PMs work, chat does not',
+        'example_username': 'jedi-turncoat'
+    }
+}
+
+def get_how_to_reach_message(platform_name):
+    """Gets a message that tells the user how to reach the bot."""
+    how_to_reach_msg = 'Here on %s you can reach me %s.' % (platform_name, PLATFORMS[platform_name]['reach_how'])
+    for key, props in PLATFORMS.items():
+        if key != platform_name:
+            how_to_reach_msg += ' On %s you can reach me %s.' % (key, props['reach_how'])
+    return how_to_reach_msg
+
+def get_generic_help_message(author: AccountId, prefix, platform_name):
+    """Gets the generic help message for account holders."""
+    interpersonal_relation = choice(['friend', 'BFF', 'homie', 'buddy', 'mortal enemy', 'frenemy', 'next door neighbor'])
+    suggested_amount = randint(1, 100)
+    suggested_name = PLATFORMS[platform_name]['example_username'] if 'example_username' in PLATFORMS[platform_name] else prefix
+    return '''How can I help you today?
+
+If you want to check your balance, send me this:
+
+> {0}balance
+
+To transfer, say, {1} tau to your {3} {2} just run the following command:
+
+> {0}transfer {1} {2}
+
+For a complete list of commands, run
+
+> {0}reference
+
+If you need help from an actual person, get in touch with the Department of Integration and they'll help you out.'''.format(
+    prefix, suggested_amount, suggested_name, interpersonal_relation)
+
+def process_help(author: AccountId, message: str, server: Server, prefix='', platform_name='Reddit', **kwargs):
     """Gets the help message for the economy bot."""
+    if server.has_account(author):
+        return '''Howdy partner! It's always a pleasure to meet an account holder. %s %s''' % (get_how_to_reach_message(platform_name), get_generic_help_message(author, prefix, platform_name))
+    else:
+        return '''Hi! You look new. {1} If you don't have an account with me yet, you can open one using this command:
+
+> {0}open
+
+Alternatively, if you already have an account then please don't create a new one here.
+Instead, link your existing account to {2} by running the following command from a username that's already associated with the account.
+
+> request-alias {3}
+
+(If you're sending me that over Discord you'll also have to ping me at the start of that command.)'''.format(
+    prefix, get_how_to_reach_message(platform_name), author.readable(), str(author))
+
+def process_reference(author: AccountId, message: str, server: Server, **kwargs):
+    """Gets the command reference message for the economy bot."""
     return '''
 Hi %s! Here's a list of the commands I understand:
 
 %s''' % (author.readable(), list_commands_as_markdown(author, server))
 
+# A list of command aliases accepted by the bot. Every key
+# in this dictionary is recognized as a command and expanded
+# to the corresponding value.
+ALIASES = {
+    'hlp': 'help',
+    'ref': 'reference',
+    'bal': 'balance'
+}
+
 # A list of the commands accepted by the bot. Every command
 # is essentially a function that maps a message to a reply.
 # For convenience, every command is associated with a help
-# string here.
+# string here. It's formatted as such:
+# 'commandName': ('commandFormat', 'helpDescription', 'command')
 COMMANDS = {
+    'reference': ('reference', 'prints a command reference message.', process_reference),
     'help': ('help', 'prints a help message.', process_help),
     'transfer': ('transfer AMOUNT BENEFICIARY', 'transfers `AMOUNT` to user `BENEFICIARY`\'s account.', process_transfer),
     'open': ('open', 'opens a new account.', process_open_account),
@@ -424,8 +632,9 @@ COMMANDS = {
         'The public key should be encoded as the contents of a PEM file that is placed on a line after the command itself.',
         process_add_public_key),
     'proxy': (
-        'proxy dsa PROXIED_ACCOUNT SIGNATURE',
+        'proxy PROXIED_ACCOUNT -OR- proxy dsa PROXIED_ACCOUNT SIGNATURE',
         'makes `PROXIED_ACCOUNT` perform the action described in the remainder of the message (starting on the next line). '
+        'If you use the first form, then you need to be authorized as a proxy of `PROXIED_ACCOUNT.` If you use the second form, '
         '`SIGNATURE` must be an ECDSA-signed SHA3-512 hash of the remainder of the message, where the key that signs the '
         'message must have its public key associated with the proxied account. This command allows a user or application to '
         'safely perform actions on an account holder\'s behalf.',
@@ -467,6 +676,11 @@ COMMANDS = {
         'generates `AMOUNT` money and deposits it in `BENEFICIARY`\'s account.',
         process_print_money,
         Authorization.ADMIN),
+    'create-recurring-transfer': (
+        'create-recurring-transfer AMOUNT_PER_TICK BENEFICIARY TICK_COUNT',
+        'creates a transfer that will transfer `AMOUNT_PER_TICK` from your account to `BENEFICIARY` every tick, for `TICK_COUNT` ticks.',
+        process_create_recurring_transfer,
+        Authorization.CITIZEN),
     'admin-create-recurring-transfer': (
         'admin-create-recurring-transfer AMOUNT_PER_TICK SENDER BENEFICIARY TICK_COUNT',
         'creates a transfer that will transfer `AMOUNT_PER_TICK` from `SENDER` to `BENEFICIARY` every tick, for `TICK_COUNT` ticks.',
@@ -477,5 +691,25 @@ COMMANDS = {
         'opens a new account with name `ACCOUNT_NAME`. '
             'If an existing user has `ACCOUNT_NAME`, then the newly created account will become that user\'s account.',
         process_admin_open_account,
+        Authorization.ADMIN),
+    'admin-freeze': (
+        'admin-freeze ACCOUNT_NAME',
+        'freezes the account with name `ACCOUNT_NAME`.',
+        process_admin_freeze,
+        Authorization.ADMIN),
+    'admin-unfreeze': (
+        'admin-unfreeze ACCOUNT_NAME',
+        'unfreezes the account with name `ACCOUNT_NAME`.',
+        process_admin_unfreeze,
+        Authorization.ADMIN),
+    'admin-add-proxy': (
+        'admin-add-proxy ACCOUNT_NAME PROXIED_ACCOUNT_NAME',
+        'gives the account with name `ACCOUNT_NAME` proxy access to the account with name `PROXIED_ACCOUNT_NAME`.',
+        process_admin_add_proxy,
+        Authorization.ADMIN),
+    'admin-remove-proxy': (
+        'admin-remove-proxy ACCOUNT_NAME PROXIED_ACCOUNT_NAME',
+        'removes the account with name `ACCOUNT_NAME`\'s proxy access to the account with name `PROXIED_ACCOUNT_NAME`.',
+        process_admin_remove_proxy,
         Authorization.ADMIN)
 }
