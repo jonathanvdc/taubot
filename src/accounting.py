@@ -45,7 +45,7 @@ class AccountId(object):
 
 
 class RedditAccountId(AccountId):
-    """An account identifier for Reddit accounts."""
+    """An account identifier type for Reddit accounts."""
     def __init__(self, value):
         self.value = value
 
@@ -55,8 +55,9 @@ class RedditAccountId(AccountId):
     def __repr__(self):
         return 'RedditAccountId(%r)' % self.value
 
+
 class DiscordAccountId(AccountId):
-    """An account identifier for Discord mentions."""
+    """An account identifier type for Discord mentions."""
     def __init__(self, discord_id):
         self.discord_id = discord_id
 
@@ -66,9 +67,29 @@ class DiscordAccountId(AccountId):
     def __str__(self):
         return 'discord/%s' % self.discord_id
 
+    def __repr__(self):
+        return 'DiscordAccountId(%r)' % self.discord_id
 
-def parse_account_id(value: str) -> AccountId:
-    """Parses an account ID."""
+
+class ProxyAccountId(AccountId):
+    """An account identifier type for proxy account accesses."""
+    def __init__(self, proxy_id, proxied_id):
+        """Creates a proxy account identifier."""
+        self.proxy_id = proxy_id
+        self.proxied_id = proxied_id
+
+    def readable(self):
+        return '%s (by proxy: %s)' % (self.proxied_id, self.proxy_id)
+
+    def __str__(self):
+        return '%s:%s' % (self.proxy_id, self.proxied_id)
+
+    def __repr__(self):
+        return 'ProxyAccountId(%r, %r)' % (self.proxy_id, self.proxied_id)
+
+
+def parse_atomic_account_id(value: str) -> AccountId:
+    """Parses a non-proxy account ID."""
     if value.startswith("<@") and value.endswith(">"):
         if value.startswith("<@!"):
             return DiscordAccountId(value[value.index("!") + 1 : -1])
@@ -78,6 +99,25 @@ def parse_account_id(value: str) -> AccountId:
         return DiscordAccountId(value[len('discord/'):])
     else:
         return RedditAccountId(value)
+
+
+def parse_account_id(value: str) -> AccountId:
+    """Parses an account ID."""
+    elems = value.split(':')
+    result = parse_atomic_account_id(elems[-1])
+    for proxy in reversed(elems[:-1]):
+        result = ProxyAccountId(parse_atomic_account_id(proxy), result)
+
+    return result
+
+
+def unwrap_proxies(account_id: AccountId) -> AccountId:
+    """Unwraps proxy account identifiers, if any, to find the account that
+       actually performed a transaction."""
+    if isinstance(account_id, ProxyAccountId):
+        return unwrap_proxies(account_id.proxied_id)
+    else:
+        return account_id
 
 
 class Authorization(Enum):
