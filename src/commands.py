@@ -1,7 +1,7 @@
 # This module defines logic for processing bot commands.
 import base64
 from typing import Union
-from accounting import Authorization, Account, AccountId, Server, parse_account_id, RedditAccountId, DiscordAccountId
+from accounting import Authorization, Account, AccountId, Server, parse_account_id, RedditAccountId, DiscordAccountId, ProxyAccountId
 from Crypto.PublicKey import ECC
 from Crypto.Signature import DSS
 from Crypto.Hash import SHA3_512
@@ -390,12 +390,12 @@ def process_proxy_command(author: AccountId, message: str, server: Server, **kwa
     if signature is None:
         author_account = assert_is_account(author, server)
         if author_account in account.get_proxies():
-            return process_command(account_id, command, server)
+            return process_command(ProxyAccountId(author, account_id), command, server)
         else:
             raise CommandException('Cannot execute command by proxy because %s is not an authorized proxy for %s.' % (author.readable(), account_id.readable()))
 
     elif is_signed_by(account, command, signature):
-        return process_command(account_id, command, server)
+        return process_command(ProxyAccountId(author, account_id), command, server)
 
     else:
         raise CommandException('Cannot execute command by proxy because the signature is invalid.')
