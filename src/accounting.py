@@ -52,6 +52,8 @@ class RedditAccountId(AccountId):
     def __str__(self):
         return self.value
 
+    def __repr__(self):
+        return 'RedditAccountId(%r)' % self.value
 
 class DiscordAccountId(AccountId):
     """An account identifier for Discord mentions."""
