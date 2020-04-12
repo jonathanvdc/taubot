@@ -61,7 +61,7 @@ class CommandTests(unittest.TestCase):
         for server in create_test_servers():
             admin_id = RedditAccountId('admin')
             admin = server.open_account(admin_id)
-            server.authorize(admin, admin, Authorization.ADMIN)
+            server.authorize(admin_id, admin, Authorization.ADMIN)
             self.assertFalse(server.has_account(RedditAccountId('general-kenobi')))
             run_command_stream(server, (admin_id, 'admin-open general-kenobi'))
             self.assertTrue(server.has_account(RedditAccountId('general-kenobi')))
@@ -104,8 +104,8 @@ class CommandTests(unittest.TestCase):
         for server in create_test_servers():
             admin_id = RedditAccountId('admin')
             admin = server.open_account(admin_id)
-            server.authorize(admin, admin, Authorization.ADMIN)
-            server.print_money(admin, admin, 123)
+            server.authorize(admin_id, admin, Authorization.ADMIN)
+            server.print_money(admin_id, admin, 123)
 
             self.assertIn(
                 '123',
@@ -119,7 +119,7 @@ class CommandTests(unittest.TestCase):
         for server in create_test_servers():
             admin_id = RedditAccountId('admin')
             admin = server.open_account(admin_id)
-            server.authorize(admin, admin, Authorization.DEVELOPER)
+            server.authorize(admin_id, admin, Authorization.DEVELOPER)
 
             account_id = RedditAccountId('general-kenobi')
             run_command_stream(server, (account_id, 'open'))
@@ -137,7 +137,7 @@ class CommandTests(unittest.TestCase):
         for server in create_test_servers():
             admin_id = RedditAccountId('admin')
             admin = server.open_account(admin_id)
-            server.authorize(admin, admin, Authorization.DEVELOPER)
+            server.authorize(admin_id, admin, Authorization.DEVELOPER)
 
             account_id = RedditAccountId('general-kenobi')
             run_command_stream(server, (account_id, 'open'))
@@ -167,7 +167,7 @@ class CommandTests(unittest.TestCase):
         for server in create_test_servers():
             admin_id = RedditAccountId('admin')
             admin = server.open_account(admin_id)
-            server.authorize(admin, admin, Authorization.ADMIN)
+            server.authorize(admin_id, admin, Authorization.ADMIN)
 
             self.assertEqual(admin.get_balance(), 0)
             run_command_stream(
@@ -181,7 +181,7 @@ class CommandTests(unittest.TestCase):
         for server in create_test_servers():
             admin_id = RedditAccountId('admin')
             admin = server.open_account(admin_id)
-            server.authorize(admin, admin, Authorization.ADMIN)
+            server.authorize(admin_id, admin, Authorization.ADMIN)
 
             self.assertEqual(admin.get_balance(), 0)
             run_command_stream(
@@ -195,7 +195,7 @@ class CommandTests(unittest.TestCase):
         for server in create_test_servers():
             admin_id = RedditAccountId('admin')
             admin = server.open_account(admin_id)
-            server.authorize(admin, admin, Authorization.ADMIN)
+            server.authorize(admin_id, admin, Authorization.ADMIN)
             run_command_stream(
                 server,
                 (admin_id, 'admin-open general-kenobi'),
@@ -227,7 +227,7 @@ class CommandTests(unittest.TestCase):
         for server in create_test_servers():
             admin_id = RedditAccountId('admin')
             admin = server.open_account(admin_id)
-            server.authorize(admin, admin, Authorization.ADMIN)
+            server.authorize(admin_id, admin, Authorization.ADMIN)
             run_command_stream(
                 server,
                 (admin_id, 'admin-open general-kenobi'),
@@ -249,7 +249,7 @@ class CommandTests(unittest.TestCase):
         for server in create_test_servers():
             admin_id = RedditAccountId('admin')
             admin = server.open_account(admin_id)
-            server.authorize(admin, admin, Authorization.ADMIN)
+            server.authorize(admin_id, admin, Authorization.ADMIN)
             run_command_stream(
                 server,
                 (admin_id, 'admin-open general-kenobi'),
@@ -276,7 +276,7 @@ class CommandTests(unittest.TestCase):
         for server in create_test_servers():
             admin_id = RedditAccountId('admin')
             admin = server.open_account(admin_id)
-            server.authorize(admin, admin, Authorization.ADMIN)
+            server.authorize(admin_id, admin, Authorization.ADMIN)
             run_command_stream(
                 server,
                 (admin_id, 'admin-open general-kenobi'),
@@ -303,7 +303,7 @@ class CommandTests(unittest.TestCase):
             admin_id = RedditAccountId('admin')
             alias_id = RedditAccountId('general-kenobi')
             admin = server.open_account(admin_id)
-            server.authorize(admin, admin, Authorization.ADMIN)
+            server.authorize(admin_id, admin, Authorization.ADMIN)
 
             # Create an alias request token.
             token_msg = run_command_stream(server, (admin_id, 'request-alias general-kenobi'))[0]
@@ -342,7 +342,7 @@ class CommandTests(unittest.TestCase):
             alias_id = RedditAccountId('general-kenobi')
             admin = server.open_account(admin_id)
             alias = server.open_account(alias_id)
-            server.authorize(admin, admin, Authorization.ADMIN)
+            server.authorize(admin_id, admin, Authorization.ADMIN)
 
             # Make the account a proxy for the admin.
             run_command_stream(server, (admin_id, 'admin-add-proxy general-kenobi admin'))[0]
@@ -367,8 +367,8 @@ class CommandTests(unittest.TestCase):
             alias_id = RedditAccountId('general-kenobi')
             admin = server.open_account(admin_id)
             alias = server.open_account(alias_id)
-            server.print_money(admin, admin, 200)
-            server.authorize(admin, admin, Authorization.ADMIN)
+            server.print_money(admin_id, admin, 200)
+            server.authorize(admin_id, admin, Authorization.ADMIN)
 
             # Make the account a proxy for the admin.
             run_command_stream(server, (admin_id, 'admin-add-proxy general-kenobi admin'))[0]

@@ -66,7 +66,8 @@ def process_admin_transfer(author: AccountId, message: str, server: Server, **kw
 
 def perform_transfer(author_name, sender_name, destination_name, amount, server):
     """Helper function that performs a transfer."""
-    author = assert_is_account(author_name, server)
+    author_id = parse_account_id(author_name)
+    assert_is_account(author_name, server)
     sender = assert_is_account(sender_name, server)
     dest = assert_is_account(destination_name, server)
 
@@ -76,7 +77,7 @@ def perform_transfer(author_name, sender_name, destination_name, amount, server)
     if not server.can_transfer(sender, dest, amount):
         return 'Sorry, but I can\'t perform that transfer.'
 
-    proof = server.transfer(author, sender, dest, amount)
+    proof = server.transfer(author_id, sender, dest, amount)
     proof_string = ' Proof: %s.' % proof if proof is not None else ''
     return 'Transfer performed successfully.%s' % proof_string
 
@@ -108,20 +109,20 @@ def process_admin_open_account(author: AccountId, message: str, server: Server, 
 
 def process_admin_freeze(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a message that freezes an account."""
-    author_account = assert_authorized(author, server, Authorization.ADMIN)
+    assert_authorized(author, server, Authorization.ADMIN)
     account_name = parse_account_name_command(message)
     account = assert_is_account(account_name, server)
 
-    server.set_frozen(author_account, account, True)
+    server.set_frozen(author, account, True)
     return 'Account %s was frozen successfully.' % account_name
 
 def process_admin_unfreeze(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a message that unfreezes an account."""
-    author_account = assert_authorized(author, server, Authorization.ADMIN)
+    assert_authorized(author, server, Authorization.ADMIN)
     account_name = parse_account_name_command(message)
     account = assert_is_account(account_name, server)
 
-    server.set_frozen(author_account, account, False)
+    server.set_frozen(author, account, False)
     return 'Account %s was unfrozen successfully.' % account_name
 
 def process_balance(author: AccountId, message: str, server: Server, **kwargs):
@@ -148,9 +149,7 @@ def process_add_public_key(author: AccountId, message: str, server: Server, **kw
 
 def assert_is_account(account_name: Union[str, AccountId], server: Server) -> Account:
     """Asserts that a particular account exists. Returns the account."""
-    if isinstance(account_name, str):
-        account_name = parse_account_id(account_name)
-
+    account_name = parse_account_id(account_name)
     if not server.has_account(account_name):
         raise CommandException(
             ('Sorry, I can\'t process your request because %s does not have an account yet. '
@@ -161,9 +160,7 @@ def assert_is_account(account_name: Union[str, AccountId], server: Server) -> Ac
 def assert_authorized(account_name: Union[str, AccountId], server: Server, auth_level: Authorization) -> Account:
     """Asserts that a particular account exists and has an authorization level that is at least `auth_level`.
        Returns the account."""
-    if isinstance(account_name, str):
-        account_name = parse_account_id(account_name)
-
+    account_name = parse_account_id(account_name)
     account = assert_is_account(account_name, server)
 
     if account.get_authorization().value < auth_level.value:
@@ -205,7 +202,7 @@ def process_authorization(author: AccountId, message: str, server: Server, **kwa
                 auth_level,
                 author_account.get_authorization()))
 
-    server.authorize(author_account, beneficiary_account, auth_level)
+    server.authorize(author, beneficiary_account, auth_level)
     return '%s now has authorization level %s.' % (beneficiary, auth_level.name)
 
 def process_list_accounts(author: AccountId, message: str, server: Server, **kwargs):
@@ -234,7 +231,7 @@ def parse_print_money(message):
 
 def process_print_money(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a request to print a batch of money and deposit it in an account."""
-    author_account = assert_authorized(author, server, Authorization.ADMIN)
+    assert_authorized(author, server, Authorization.ADMIN)
     parsed = parse_print_money(message)
     if parsed is None:
         raise CommandException('Command formatted incorrectly. Expected format `print-money AMOUNT BENEFICIARY`.')
@@ -245,7 +242,7 @@ def process_print_money(author: AccountId, message: str, server: Server, **kwarg
 
     beneficiary_account = assert_is_account(beneficiary, server)
     if amount != 0:
-        server.print_money(author_account, beneficiary_account, amount)
+        server.print_money(author, beneficiary_account, amount)
 
     return 'Money printed successfully.'
 
@@ -274,12 +271,12 @@ def process_admin_create_recurring_transfer(author: AccountId, message: str, ser
 
     amount, sender_name, destination_name, tick_count = parse_result
 
-    author_account = assert_is_account(author, server)
+    assert_is_account(author, server)
     sender_account = assert_is_account(sender_name, server)
     dest_account = assert_is_account(destination_name, server)
 
     transfer = server.create_recurring_transfer(
-        author_account,
+        author,
         sender_account,
         dest_account,
         amount * tick_count,
@@ -314,7 +311,7 @@ def process_create_recurring_transfer(author: AccountId, message: str, server: S
     dest_account = assert_is_account(destination_name, server)
 
     transfer = server.create_recurring_transfer(
-        author_account,
+        author,
         author_account,
         dest_account,
         amount * tick_count,
@@ -475,7 +472,7 @@ def parse_admin_add_proxy_command(message):
 
 def process_admin_add_proxy(author: AccountId, message: str, server: Server, **kwargs):
     """Processes an admin proxy addition command."""
-    author_account = assert_authorized(author, server, Authorization.ADMIN)
+    assert_authorized(author, server, Authorization.ADMIN)
     parsed = parse_admin_add_proxy_command(message)
     if parsed is None:
         raise CommandException('Incorrect formatting. Expected format `admin-add-proxy ACCOUNT_NAME PROXIED_ACCOUNT_NAME`.')
@@ -483,12 +480,12 @@ def process_admin_add_proxy(author: AccountId, message: str, server: Server, **k
     account_name, proxied_account_name = parsed
     account = assert_is_account(account_name, server)
     proxied_account = assert_is_account(proxied_account_name, server)
-    server.add_proxy(author_account, account, proxied_account)
+    server.add_proxy(author, account, proxied_account)
     return 'Account %s can now act as a proxy for account %s.' % (account_name, proxied_account_name)
 
 def process_admin_remove_proxy(author: AccountId, message: str, server: Server, **kwargs):
     """Processes an admin proxy addition command."""
-    author_account = assert_authorized(author, server, Authorization.ADMIN)
+    assert_authorized(author, server, Authorization.ADMIN)
     parsed = parse_admin_add_proxy_command(message)
     if parsed is None:
         raise CommandException('Incorrect formatting. Expected format `admin-remove-proxy ACCOUNT_NAME PROXIED_ACCOUNT_NAME`.')
@@ -496,7 +493,7 @@ def process_admin_remove_proxy(author: AccountId, message: str, server: Server, 
     account_name, proxied_account_name = parsed
     account = assert_is_account(account_name, server)
     proxied_account = assert_is_account(proxied_account_name, server)
-    server.remove_proxy(author_account, account, proxied_account)
+    server.remove_proxy(author, account, proxied_account)
     return 'Account %s can no longer act as a proxy for account %s.' % (account_name, proxied_account_name)
 
 def process_command(author: AccountId, message: str, server: Server, prefix=''):
