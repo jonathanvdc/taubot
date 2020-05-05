@@ -4,23 +4,30 @@
 #
 # The flow between client and server is as follows:
 #
-#   1. Client sends the following message, encrypted using ecies and the server's public key.
-#      (a) a 32-digit nonce,
-#      (b) a UTF-8 encoded account ID,
-#      (c) a new ecies public key for the server's response,
-#      (d) the actual request, and
-#      (e) an ECDSA signature of the SHA3-512 digest of (a)(b)(c), signed with one of the client's associated keys.
+#    1. Client sends a message.
+#        i.  The message starts off with a header, encrypted using PKCS#1 OAEP with the server's public key.
+#            Such a header is simply a 16-byte AES128 key. Headers are length-prefixed.
 #
-#   2. Server responds. Its response is encrypted using the ecies key pair sent by the client.
+#        ii. A 32-byte nonce and a length-prefixed MAC for the body.
+#
+#        iii.The message then proceeds with a body. The body is encrypted using AES128 in GCM with the key
+#            specified in the header. Its plaintext consists of:
+#            (a) a length-prefixed UTF-8 encoded account ID,
+#            (b) a length-prefixed new 16-byte AES128 key for the server's response,
+#            (c) the actual request (length-prefixed), and
+#            (d) an ECDSA signature of the SHA3-512 digest of (ii)(a)(b)(c), signed with one of the client's associated keys.
+#
+#    2. Server responds. Its response is encrypted using the AES128 key (GCM again) sent by the client.
+#       The encrypted data is again prefixed by a 32-byte nonce and a length-prefixed MAC.
 #
 
 import random
 import struct
 from enum import Enum
-from ecies.utils import generate_key
-from ecies import encrypt, decrypt
 from Crypto.Signature import DSS
 from Crypto.Hash import SHA3_512
+from Crypto.Cipher import AES, PKCS1_OAEP
+from Crypto.Random import get_random_bytes
 from aiohttp import web
 from accounting import parse_account_id, Account, AccountId, Server
 
@@ -40,15 +47,20 @@ def take_length_prefixed(data: bytes):
        Returns the contents of the length-prefixed byte string and the remaining
        bytes in `data`."""
     length, = struct.unpack('<i', data[:4])
-    return (data[4:4 + length], data[4 + length:])
+    return take_bytes(data[4:], length)
 
 
-def compose_unsigned_plaintext_request(nonce: bytes, account_id: AccountId, response_pk_bytes: bytes, request_data: bytes):
+def take_bytes(data: bytes, count: int):
+    """Takes a byte string that starts with a length-prefixed byte string.
+       Returns the contents of the length-prefixed byte string and the remaining
+       bytes in `data`."""
+    return (data[:count], data[count:])
+
+def compose_unsigned_plaintext_request(account_id: AccountId, response_key_bytes: bytes, request_data: bytes):
     """Composes an unsigned plaintext request."""
     return b''.join([
-        nonce,
         length_prefix(str(account_id).encode('utf-8')),
-        length_prefix(response_pk_bytes),
+        length_prefix(response_key_bytes),
         length_prefix(request_data)
     ])
 
@@ -62,19 +74,18 @@ def sign_message(message: bytes, private_key) -> bytes:
 def compose_signed_plaintext_request(
         nonce: bytes,
         account_id: AccountId,
-        response_pk_bytes: bytes,
+        response_key_bytes: bytes,
         request_data: bytes,
         private_key) -> bytes:
     """Composes an signed plaintext request."""
     # Compose the message.
     message = compose_unsigned_plaintext_request(
-        nonce,
         account_id,
-        response_pk_bytes,
+        response_key_bytes,
         request_data)
 
     # Sign the message.
-    message += sign_message(message, private_key)
+    message += sign_message(nonce + message, private_key)
 
     return message
 
@@ -88,40 +99,48 @@ class RequestClient(object):
         self.client_private_key = client_private_key
 
     def encrypt_request(self, request_data: bytes):
-        """Encrypts a request message. Returns a (response private key, encrypted message) pair."""
+        """Encrypts a request message. Returns a (response secret key, encrypted message) pair."""
 
         # First create the nonce.
         nonce = generate_nonce(32)
 
-        # Generate a response key pair.
-        reply_key = generate_key()
-        sk_bytes = reply_key.secret
-        pk_bytes = reply_key.public_key.format(True)
+        # Generate a response key.
+        reply_key = get_random_bytes(16)
 
         # Compose the message.
-        message = compose_signed_plaintext_request(
+        plaintext_body = compose_signed_plaintext_request(
             nonce,
             self.account_id,
-            pk_bytes,
+            reply_key,
             request_data,
             self.client_private_key)
 
+        # Generate the header.
+        message_key = get_random_bytes(16)
+        header = PKCS1_OAEP.new(self.server_public_key).encrypt(message_key)
+
+        # Encrypt the message body with AES in GCM.
+        cipher = AES.new(message_key, AES.MODE_GCM, nonce=nonce)
+        body, tag = cipher.encrypt_and_digest(plaintext_body)
+
         # Encrypt the message.
-        return (sk_bytes, encrypt(self.server_public_key, message))
+        return (reply_key, length_prefix(header) + nonce + length_prefix(tag) + body)
 
     def create_request(self, request_command: str, request_data: bytes):
         """Creates an encrypted request from a command and the request data."""
         return self.encrypt_request(length_prefix(request_command.encode('utf-8')) + request_data)
 
-    def decrypt_response(self, sk_bytes, encrypted_response: bytes) -> bytes:
+    def decrypt_response(self, response_key, encrypted_response: bytes) -> bytes:
         """Decrypts an encrypted response message."""
-        return decrypt(sk_bytes, encrypted_response)
+        nonce, encrypted_response = take_bytes(encrypted_response, 32)
+        tag, encrypted_response = take_length_prefixed(encrypted_response)
+        return AES.new(response_key, AES.MODE_GCM, nonce=nonce).decrypt_and_verify(encrypted_response, tag)
 
     async def get_response(self, request_command: str, request_data: bytes, send_request) -> bytes:
         """Sends a command and reads the response."""
-        sk_bytes, msg = self.create_request(request_command, request_data)
+        reply_key, msg = self.create_request(request_command, request_data)
         enc_response = await send_request(msg)
-        response = self.decrypt_response(sk_bytes, enc_response)
+        response = self.decrypt_response(reply_key, enc_response)
         status_code = StatusCode(struct.unpack('<i', response[:4])[0])
         response_body = response[4:]
         if status_code != StatusCode.SUCCESS:
@@ -180,7 +199,7 @@ class RequestServer(object):
     def handle_request_body(self, request_body: bytes) -> bytes:
         """Handles an HTTP request body."""
         # Decrypt the request.
-        account, pk_bytes, message = self.decrypt_request(request_body)
+        account, reply_key, message = self.decrypt_request(request_body)
 
         # Decompose the request message into a command and data.
         request_command_bytes, request_data = take_length_prefixed(message)
@@ -196,19 +215,22 @@ class RequestServer(object):
         response = struct.pack('<i', status_code.value) + response_body
 
         # Encrypt the response.
-        return self.encrypt_response(pk_bytes, response)
+        return self.encrypt_response(reply_key, response)
 
-    def encrypt_response(self, pk_bytes, response: bytes) -> bytes:
+    def encrypt_response(self, message_key, response: bytes) -> bytes:
         """Encrypts an outgoing message."""
-        return encrypt(pk_bytes, response)
+        nonce = generate_nonce(32)
+        enc_response, tag = AES.new(message_key, AES.MODE_GCM, nonce=nonce).encrypt_and_digest(response)
+        return nonce + length_prefix(tag) + enc_response
 
     def decrypt_request(self, encrypted_data: bytes):
         """Decrypts and verifies an incoming encrypted request message."""
-        plaintext = data = decrypt(self.private_key, encrypted_data)
+        # Decode and decrypt the header.
+        header, encrypted_data = take_length_prefixed(encrypted_data)
+        body_key = PKCS1_OAEP.new(self.private_key).decrypt(header)
 
         # Process the nonce.
-        nonce = data[:32]
-        data = data[32:]
+        nonce, encrypted_data = take_bytes(encrypted_data, 32)
         if nonce in self.used_nonces:
             raise DecryptionException('Nonce %r is reused.' % nonce)
 
@@ -217,19 +239,23 @@ class RequestServer(object):
 
         self.used_nonces.add(nonce)
 
+        # Decrypt the body.
+        tag, encrypted_data = take_length_prefixed(encrypted_data)
+        plaintext = data = AES.new(body_key, AES.MODE_GCM, nonce=nonce).decrypt_and_verify(encrypted_data, tag)
+
         # Read the account name.
         account_id_bytes, data = take_length_prefixed(data)
         account_id = parse_account_id(account_id_bytes.decode('utf-8'))
         if not self.server.has_account(account_id):
-            raise DecryptionException('Account %r does not exist.', account_id)
+            raise DecryptionException('Account %r does not exist.' % account_id)
 
         account = self.server.get_account(account_id)
 
         # Read all the other data.
-        pk_bytes, data = take_length_prefixed(data)
+        reply_key, data = take_length_prefixed(data)
         message, data = take_length_prefixed(data)
 
-        data_hash = SHA3_512.new(plaintext[:-len(data)])
+        data_hash = SHA3_512.new(nonce + plaintext[:-len(data)])
 
         # Check the digital signature.
         any_verified = False
@@ -247,7 +273,7 @@ class RequestServer(object):
         if not any_verified:
             raise DecryptionException('Invalid signature.')
 
-        return (account, pk_bytes, message)
+        return (account, reply_key, message)
 
 
 def _handle_balance_request(data: bytes, account: Account, server: Server):

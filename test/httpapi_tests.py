@@ -9,8 +9,7 @@ import asyncio
 from httpapi import length_prefix, take_length_prefixed, RequestClient, RequestServer, compose_signed_plaintext_request, DecryptionException
 from accounting import RedditAccountId, InMemoryServer
 import unittest
-from Crypto.PublicKey import ECC
-from ecies import generate_key
+from Crypto.PublicKey import ECC, RSA
 
 
 def create_client_and_server():
@@ -25,14 +24,14 @@ def create_client_and_server():
     server.add_public_key(account, account_key.public_key())
 
     # Create a key for the server.
-    server_key = generate_key()
+    server_key = RSA.generate(2048)
 
     # Create a message client.
     msg_client = RequestClient(
-        account_id, server_key.public_key.format(True), account_key)
+        account_id, server_key.publickey(), account_key)
 
     # Create a message server.
-    msg_server = RequestServer(server, server_key.secret)
+    msg_server = RequestServer(server, server_key)
 
     return (msg_client, msg_server)
 
