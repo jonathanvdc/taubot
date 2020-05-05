@@ -34,7 +34,7 @@ from accounting import parse_account_id, Account, AccountId, Server
 
 def generate_nonce(length):
     """Generates a pseudorandom number."""
-    return ''.join(str(random.randint(0, 9)) for i in range(length)).encode('utf-8')
+    return get_random_bytes(length)
 
 
 def length_prefix(data: bytes) -> bytes:
