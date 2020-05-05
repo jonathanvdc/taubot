@@ -115,7 +115,7 @@ if __name__ == '__main__':
 
         if content.startswith(prefixes): # Checking all messages that start with the prefix.
             prefix = [prefix for prefix in prefixes if content.startswith(prefix)][0]
-            command_content = content[len(prefix):].lstrip()
+            command_content = content[len(prefix):].lstrip().lower()
             response = discord_postprocess(
                 process_command(
                     DiscordAccountId(str(message.author.id)),
