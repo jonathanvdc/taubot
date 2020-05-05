@@ -146,9 +146,9 @@ if __name__ == '__main__':
         asyncio.get_event_loop().create_task(comment_loop(reddit, server))
 
         # Run the HTTP server.
-        if 'server-key' in config:
+        if 'server_key' in config:
             app = web.Application()
-            app.router.add_get('/', RequestServer(server, RSA.import_key(config['server-key']).handle_request))
+            app.router.add_get('/', RequestServer(server, RSA.import_key(config['server_key'])).handle_request)
             loop.create_task(web._run_app(app))
 
         # Run the Discord bot.
