@@ -1,3 +1,4 @@
 praw
 pycryptodome
 discord.py
+eciespy
