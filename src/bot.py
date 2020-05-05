@@ -11,6 +11,7 @@ from accounting import LedgerServer, Authorization, RedditAccountId, DiscordAcco
 from commands import COMMANDS, list_commands_as_markdown, CommandException, assert_authorized, process_command
 from utils import split_into_chunks, discord_postprocess
 from httpapi import RequestServer
+from Crypto.PublicKey import RSA
 
 # move this to config?
 prefix = "e!"
@@ -145,9 +146,10 @@ if __name__ == '__main__':
         asyncio.get_event_loop().create_task(comment_loop(reddit, server))
 
         # Run the HTTP server.
-        app = web.Application()
-        app.router.add_get('/', RequestServer(server, None).handle_request)
-        loop.create_task(web._run_app(app))
+        if 'server-key' in config:
+            app = web.Application()
+            app.router.add_get('/', RequestServer(server, RSA.import_key(config['server-key']).handle_request))
+            loop.create_task(web._run_app(app))
 
         # Run the Discord bot.
         if 'discord_token' in config:

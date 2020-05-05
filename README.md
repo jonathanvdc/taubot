@@ -19,8 +19,9 @@ The bot will need credentials to log into Reddit. Summarize them in a JSON file 
   "reddit_client_id": "CLIENT_ID",
   "reddit_client_secret": "CLIENT_SECRET",
   "reddit_username": "USERNAME",
-  "reddit_password": "PASSWORD"
-  "discord_token": "BOT TOKEN"
+  "reddit_password": "PASSWORD",
+  "discord_token": "BOT TOKEN",
+  "server-key": "PEM PRIVATE RSA KEY"
 }
 ```
 

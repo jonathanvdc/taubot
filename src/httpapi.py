@@ -28,8 +28,14 @@ from Crypto.Signature import DSS
 from Crypto.Hash import SHA3_512
 from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.Random import get_random_bytes
+from Crypto.PublicKey import RSA
 from aiohttp import web
 from accounting import parse_account_id, Account, AccountId, Server
+
+
+def generate_server_key():
+    """Generates a private server key."""
+    return RSA.generate(2048)
 
 
 def generate_nonce(length):

@@ -6,10 +6,10 @@ sys.path.append(path.join(path.dirname(
     path.dirname(path.abspath(__file__))), 'src'))
 
 import asyncio
-from httpapi import length_prefix, take_length_prefixed, RequestClient, RequestServer, compose_signed_plaintext_request, DecryptionException
+from httpapi import generate_server_key, length_prefix, take_length_prefixed, RequestClient, RequestServer, compose_signed_plaintext_request, DecryptionException
 from accounting import RedditAccountId, InMemoryServer
 import unittest
-from Crypto.PublicKey import ECC, RSA
+from Crypto.PublicKey import ECC
 
 
 def create_client_and_server():
@@ -24,7 +24,7 @@ def create_client_and_server():
     server.add_public_key(account, account_key.public_key())
 
     # Create a key for the server.
-    server_key = RSA.generate(2048)
+    server_key = generate_server_key()
 
     # Create a message client.
     msg_client = RequestClient(
