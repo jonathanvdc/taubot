@@ -851,7 +851,7 @@ class LedgerServer(InMemoryServer):
     def _ledger_write(self, *args, t=None):
         if t is None:
             t = time.time()
-        elems = [str(t)] + list(map(str, args))
+        elems = [str(t)] + ['%d/%d' % (x.numerator, x.denominator) if isinstance(x, Fraction) else str(x) for x in args]
         salt, new_hash = generate_salt_and_hash(self.last_hash, elems, self.leading_zero_count)
         with open(self.ledger_path, 'a') as f:
             f.writelines(' '.join([new_hash.hexdigest(), salt] + elems) + '\n')
