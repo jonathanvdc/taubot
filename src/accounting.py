@@ -47,6 +47,7 @@ class AccountId(object):
 
 class RedditAccountId(AccountId):
     """An account identifier type for Reddit accounts."""
+
     def __init__(self, value):
         self.value = value
 
@@ -59,6 +60,7 @@ class RedditAccountId(AccountId):
 
 class DiscordAccountId(AccountId):
     """An account identifier type for Discord mentions."""
+
     def __init__(self, discord_id):
         self.discord_id = discord_id
 
@@ -74,6 +76,7 @@ class DiscordAccountId(AccountId):
 
 class ProxyAccountId(AccountId):
     """An account identifier type for proxy account accesses."""
+
     def __init__(self, proxy_id, proxied_id):
         """Creates a proxy account identifier."""
         self.proxy_id = proxy_id
@@ -93,9 +96,9 @@ def parse_atomic_account_id(value: str) -> AccountId:
     """Parses a non-proxy account ID."""
     if value.startswith("<@") and value.endswith(">"):
         if value.startswith("<@!"):
-            return DiscordAccountId(value[value.index("!") + 1 : -1])
+            return DiscordAccountId(value[value.index("!") + 1: -1])
         else:
-            return DiscordAccountId(value[value.index("@") + 1 : -1])
+            return DiscordAccountId(value[value.index("@") + 1: -1])
     elif value.startswith('discord/'):
         return DiscordAccountId(value[len('discord/'):])
     else:
@@ -273,12 +276,12 @@ class Server(object):
         raise NotImplementedError()
 
     def create_recurring_transfer(
-        self,
-        author: AccountId,
-        source: Account,
-        destination: Account,
-        total_amount: Fraction,
-        tick_count: int) -> RecurringTransfer:
+            self,
+            author: AccountId,
+            source: Account,
+            destination: Account,
+            total_amount: Fraction,
+            tick_count: int) -> RecurringTransfer:
         """Creates and registers a new recurring transfer, i.e., a transfer that is spread out over
            many ticks. The transfer is authorized by `author` and consists of `total_amount` being
            transferred from `source` to `destination` over the course of `tick_count` ticks. A tick
@@ -299,9 +302,9 @@ class Server(object):
         """Tells if a particular amount of money can be transferred from one account on this
            server to another. `destination` and `amount` are both `Account` objects."""
         return amount > 0 and \
-            source.get_balance() - amount >= 0 and \
-            not source.is_frozen() and \
-            not destination.is_frozen()
+               source.get_balance() - amount >= 0 and \
+               not source.is_frozen() and \
+               not destination.is_frozen()
 
 
 class InMemoryServer(Server):
@@ -326,6 +329,22 @@ class InMemoryServer(Server):
         self.accounts[id] = account
         self.inv_accounts[account].append(id)
         return account
+
+    def delete_account(self, id: AccountId, account_uuid=None):
+        if self.has_account(id):
+            account = self.accounts[id]
+            to_be_deleted = []
+            for rec_transfer in self.recurring_transfers:
+                if self.recurring_transfers[rec_transfer].get_destination() == account or self.recurring_transfers[rec_transfer].get_source() == account:
+                    to_be_deleted.append(rec_transfer)
+
+            for key in to_be_deleted:
+                del self.recurring_transfers[key]
+
+            del self.accounts[id]
+            del self.inv_accounts[account][0]
+
+            return True
 
     def add_account_alias(self, account: Account, alias_id: AccountId):
         """Associates an additional ID with an account."""
@@ -382,6 +401,9 @@ class InMemoryServer(Server):
     def print_money(self, author: AccountId, account: Account, amount: Fraction):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
         account.balance += amount
+
+    def remove_funds(self, author: Account, account: Account, amount: Fraction):
+        account.balance -= amount
 
     def transfer(self, author: AccountId, source: Account, destination: Account, amount: Fraction):
         """Transfers a particular amount of money from one account on this server to another on
@@ -522,12 +544,14 @@ class InMemoryRecurringTransfer(RecurringTransfer):
         """Gets the remaining amount to transfer."""
         return self.remaining_amount
 
+
 def compute_hash(previous_hash, elements):
     """Computes the SHA3-256 hash digest of a previous hash and a list of strings."""
     hash_obj = SHA3_256.new(previous_hash)
     for item in elements:
         hash_obj.update(item.encode('utf-8'))
     return hash_obj
+
 
 def generate_salt_and_hash(previous_hash, elements, zero_count):
     """Generates a salt, hash pair with the appropriate number of leading zeros."""
@@ -539,6 +563,7 @@ def generate_salt_and_hash(previous_hash, elements, zero_count):
             hash_obj.update(item.encode('utf-8'))
         if has_leading_zeros(hash_obj.hexdigest(), zero_count):
             return (salt, hash_obj)
+
 
 def has_leading_zeros(hexdigest, zero_count):
     """Checks if a hex digest has at least `zero_count` leading zero bits."""
@@ -560,6 +585,7 @@ def has_leading_zeros(hexdigest, zero_count):
 
     return True
 
+
 def create_initial_ledger_entries(entries, leading_zero_count=12, initial_hash=b''):
     """Creates an initial ledger by annotating hashless ledger entries with hashes and salts.
        `entries` is a list of unannotated ledger lines. A modified list of ledger lines is returned."""
@@ -573,6 +599,7 @@ def create_initial_ledger_entries(entries, leading_zero_count=12, initial_hash=b
 
     return results
 
+
 def create_initial_ledger(unannotated_ledger_path, result_path, leading_zero_count=12, initial_hash=b''):
     """Creates an initial ledger by reading the unannotated ledger at `unannoted_ledger_path`,
        annotating every line with a hash and a salt and then writing the result to
@@ -585,6 +612,119 @@ def create_initial_ledger(unannotated_ledger_path, result_path, leading_zero_cou
     with open(result_path, 'w') as f:
         f.writelines(line + '\n' for line in lines)
 
+
+class WealthTaxBracket:
+    """Tax Bracket Object used to represent wealth tax brackets so they can be easily modified"""
+
+    def __init__(self, start, end, rate, exempt_prefixes=None):
+        if exempt_prefixes is None:
+            exempt_prefixes = ['&', '@'] # default prefixes for government and non-profits
+        self.start = start
+        self.end = end
+        self.tax_rate = rate
+        self.exempt_prefixes = exempt_prefixes
+
+    def set_rate(self, rate):
+        # sets tax rate
+        self.tax_rate = rate
+
+    def add_exempt_prefix(self, prefix):
+        # adds exempt prefixes
+        self.exempt_prefixes.append(prefix)
+
+    def get_rate(self):
+        # returns tax rate for bracket object
+        return self.tax_rate
+
+    def set_end(self, end):
+        # sets the end of the starting
+        self.end = end
+
+    def set_start(self, start):
+        self.start = start
+
+    def get_start(self):
+        return self.start
+
+    def get_end(self):
+        return self.end
+
+    def get_tax(self, account):
+        bal = account.get_balance()
+        if bal < self.start:
+            return 0
+        elif self.end is None or bal <= self.end:
+            tax_amount = round(((bal - self.start) / 100) * self.tax_rate)
+            return tax_amount
+        elif bal > self.end:
+            tax_amount = round(((self.end - self.start) / 100) * self.tax_rate)
+            return tax_amount
+
+
+
+class TaxException(Exception):
+    pass
+
+
+class TaxMan:
+    def __init__(self, server, tax_regularity=28, auto_tax=False):
+        self.tax_brackets = {}
+        self.ticks_till_tax = tax_regularity
+        self.ticks_till_tax_tmp = self.ticks_till_tax
+        self.server = server
+        self.autoTax = auto_tax
+
+
+    def get_bracket(self, name):
+        return self.tax_brackets[name]
+
+
+    def add_tax_bracket(self, min_amount, max_amount, rate, name):
+        self.tax_brackets[name] = WealthTaxBracket(min_amount, max_amount, rate)
+        print(self.tax_brackets)
+
+    def remove_tax_bracket(self, name):
+        try:
+            del self.tax_brackets[name]
+        except KeyError as e:
+            raise TaxException("That Account Doesn't Exist SMH")
+
+    def force_ticks(self, amount=1):
+        """Only works temporarily is purely for testing purposes"""
+        if not self.autoTax:
+            return
+        self.ticks_till_tax_tmp -= amount
+        if self.ticks_till_tax_tmp <= 0 and self.autoTax:
+            self.tax()
+        return
+
+    def tick(self, from_ledger=False):
+        if not self.autoTax:
+            return
+        self.ticks_till_tax_tmp -= 1
+        if self.ticks_till_tax_tmp <= 0:
+            self.ticks_till_tax_tmp = self.ticks_till_tax
+            if not from_ledger:
+                self.tax()
+        return
+
+    def toggle_auto_tax(self) -> bool:
+        self.autoTax = not self.autoTax
+        return self.autoTax
+
+    def tax(self):
+        self.ticks_till_tax_tmp = self.ticks_till_tax
+        i = 0
+        for account in self.server.list_accounts():
+            i +=1
+            for tax_bracket in self.tax_brackets:
+                if self.server.get_account_id(account).startswith(tuple(self.tax_brackets[tax_bracket].exempt_prefixes)): continue
+                tax_amount = self.tax_brackets[tax_bracket].get_tax(account)
+                if tax_amount != 0:
+                    self.server.transfer('@government', account, self.server.get_government_account(), tax_amount)
+        return
+
+
 class LedgerServer(InMemoryServer):
     """A server implementation that logs every action in a ledger.
        The ledger can be read to reconstruct the state of the server."""
@@ -592,6 +732,7 @@ class LedgerServer(InMemoryServer):
     def __init__(self, ledger_path, leading_zero_count=12):
         """Initializes a ledger-based server."""
         super().__init__()
+        self.taxObject = TaxMan(self)
         self.last_tick_timestamp = time.time()
         self.last_hash = b''
         self.ledger_path = ledger_path
@@ -609,6 +750,7 @@ class LedgerServer(InMemoryServer):
     def close(self):
         """Closes the server's underlying ledger file."""
         self.ledger_file.close()
+
 
     def _read_ledger(self, ledger_path):
         """Reads a ledger at a particular path."""
@@ -660,7 +802,14 @@ class LedgerServer(InMemoryServer):
                 super().print_money(
                     parse_account_id(elems[1]),
                     self.get_account_from_string(elems[2]),
-                    Fraction(elems[3]))
+                    Fraction(elems[3])
+                )
+            elif cmd == 'remove-funds':
+                super().remove_funds(
+                    self.get_account_from_string(elems[1]),
+                    self.get_account_from_string(elems[2]),
+                    int(elems[3])
+                )
             elif cmd == 'perform-recurring-transfer':
                 super().perform_recurring_transfer(
                     self.get_recurring_transfer(elems[1]),
@@ -694,6 +843,17 @@ class LedgerServer(InMemoryServer):
                     parse_account_id(elems[2]))
             elif cmd == 'tick':
                 self.last_tick_timestamp = timestamp
+                self.taxObject.tick(True)
+            elif cmd == 'delete-account':
+                super().delete_account(elems[2])
+            elif cmd == 'add-tax-bracket':
+                self.get_tax_object().add_tax_bracket(int(elems[2]), int(elems[3]) if elems[3] != "None" else None, int(elems[4]), str(elems[5]))
+            elif cmd == 'remove-tax-bracket':
+                self.get_tax_object().remove_tax_bracket(elems[2])
+            elif cmd == 'toggle-auto-tax':
+                self.get_tax_object().toggle_auto_tax()
+            elif cmd == 'force-tax':
+                pass
             else:
                 raise Exception("Unknown ledger command '%s'." % cmd)
 
@@ -760,6 +920,62 @@ class LedgerServer(InMemoryServer):
             self.get_account_id(proxied_account))
         return result
 
+    def delete_account(self, account: AccountId, author: Account):
+        result = super().delete_account(account)
+        self._ledger_write(
+            'delete-account',
+            author,
+            account
+        )
+        return result
+
+    def get_tax_object(self):
+        return self.taxObject
+
+    def add_tax_bracket(self, author: AccountId, start, end, rate, name):
+        self.get_tax_object().add_tax_bracket(start, end, rate, name)
+        self._ledger_write(
+            'add-tax-bracket',
+            author,
+            str(start),
+            str(end),
+            str(rate),
+            name
+        )
+
+    def remove_tax_bracket(self, author: AccountId, name):
+        self.get_tax_object().remove_tax_bracket(name)
+        self._ledger_write(
+            'remove-tax-bracket',
+            author,
+            name
+        )
+
+    def get_tax_brackets(self) -> dict:
+        return self.get_tax_object().tax_brackets
+
+    def force_tax(self, author):
+        self.get_tax_object().tax()
+        self._ledger_write(
+            'force-tax',
+            author
+        )
+
+    def toggle_auto_tax(self, author) -> bool:
+        ans = self.get_tax_object().toggle_auto_tax()
+        self._ledger_write(
+            'toggle-auto-tax',
+            author
+        )
+        return ans
+
+    def add_exempt_prefix(self, author: AccountId, prefix, tax_group):
+        self.get_tax_object().get_bracket(tax_group)
+        self._ledger_write(
+            'add-exempt-prefix'
+        )
+
+
     def remove_proxy(self, author: AccountId, account: Account, proxied_account: Account) -> bool:
         """Ensures that `account` is not a proxy for `proxied_account`. Returns
            `False` is `account` was not a proxy for `procied_account`;
@@ -781,6 +997,16 @@ class LedgerServer(InMemoryServer):
             self.get_account_id(account),
             amount)
 
+    def remove_funds(self, author, account, amount: Fraction):
+        """Removes `amount` from `account` with `author`'s authority"""
+        super().remove_funds(author, account, amount)
+        self._ledger_write(
+            'remove-funds',
+            self.get_account_id(author),
+            self.get_account_id(account),
+            amount
+        )
+
     def transfer(self, author: AccountId, source, destination, amount: Fraction):
         """Transfers a particular amount of money from one account on this server to another on
            the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
@@ -797,6 +1023,7 @@ class LedgerServer(InMemoryServer):
     def notify_tick_elapsed(self, tick_timestamp=None):
         """Notifies the server that a tick has elapsed."""
         super().notify_tick_elapsed()
+        self.taxObject.tick()
         self.last_tick_timestamp = self._ledger_write('tick', t=tick_timestamp)
 
     def create_recurring_transfer(self, author: AccountId, source, destination, total_amount: Fraction, tick_count: int, transfer_id=None):
