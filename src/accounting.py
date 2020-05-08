@@ -333,8 +333,17 @@ class InMemoryServer(Server):
     def delete_account(self, id: AccountId, account_uuid=None):
         if self.has_account(id):
             account = self.accounts[id]
+            to_be_deleted = []
+            for rec_transfer in self.recurring_transfers:
+                if self.recurring_transfers[rec_transfer].get_destination() == account or self.recurring_transfers[rec_transfer].get_source() == account:
+                    to_be_deleted.append(rec_transfer)
+
+            for key in to_be_deleted:
+                del self.recurring_transfers[key]
+
             del self.accounts[id]
             del self.inv_accounts[account][0]
+
             return True
 
     def add_account_alias(self, account: Account, alias_id: AccountId):
