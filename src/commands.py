@@ -1,6 +1,6 @@
 # This module defines logic for processing bot commands.
 import base64
-import time
+from fractions import Fraction
 from typing import Union
 from accounting import Authorization, Account, AccountId, Server, parse_account_id, RedditAccountId, DiscordAccountId, ProxyAccountId
 from Crypto.PublicKey import ECC
@@ -22,7 +22,7 @@ def parse_transfer_command(message):
 
     _, amount_text, destination = body
     try:
-        amount = int(amount_text)
+        amount = Fraction(amount_text)
     except ValueError:
         return None
 
@@ -50,7 +50,7 @@ def parse_admin_transfer_command(message):
 
     _, amount_text, sender, destination = body
     try:
-        amount = int(amount_text)
+        amount = Fraction(amount_text)
     except ValueError:
         return None
 
@@ -224,6 +224,16 @@ def process_authorization(author: AccountId, message: str, server: Server, **kwa
     server.authorize(author, beneficiary_account, auth_level)
     return '%s now has authorization level %s.' % (beneficiary, auth_level.name)
 
+def fraction_to_str(frac: Fraction) -> str:	
+    """Turns a fraction into an easy-to-read string."""	
+    int_amount = frac.numerator // frac.denominator	
+    if int_amount <= 0 and frac.numerator != 0:	
+        return '%d/%d' % (frac.numerator, frac.denominator)	
+    elif frac.numerator % frac.denominator == 0:	
+        return str(int_amount)	
+    else:	
+        return '%d %d/%d' % (int_amount, frac.numerator - int_amount * frac.denominator, frac.denominator)
+
 
 def process_list_accounts(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a message requesting a list of all accounts."""
@@ -231,7 +241,7 @@ def process_list_accounts(author: AccountId, message: str, server: Server, **kwa
         '| %s%s | %s |' % (
             '' if account.get_authorization() == Authorization.CITIZEN else '**%s** ' % account.get_authorization().name.lower(),
             ' aka '.join(str(x) for x in server.get_account_ids(account)),
-            account.get_balance())
+            fraction_to_str(account.get_balance()))
         for account in server.list_accounts()
     ])
 
@@ -244,7 +254,7 @@ def parse_print_money(message):
 
     _, amount_text, beneficiary = body
     try:
-        amount = int(amount_text)
+        amount = Fraction(amount_text)
     except ValueError:
         return None
 
@@ -276,7 +286,7 @@ def process_remove_funds(author: AccountId, message: str, server: Server, **kwar
         raise CommandException('Bad formatting; Expected `remove-funds` `AMOUNT` `BENEFICIARY`')
     amount, beneficiary = parsed
     if amount < 0:
-        raise CommandException('I can\'t remove negatives amount of funds')
+        raise CommandException('I can\'t remove negative amounts of funds')
     beneficiary_account = assert_is_account(beneficiary, server)
     if amount != 0:
         server.remove_funds(author_account, beneficiary_account, amount)
@@ -290,7 +300,7 @@ def parse_remove_funds(message):
 
     _, amount_text, account = body
     try:
-        amount = int(amount_text)
+        amount = Fraction(amount_text)
     except ValueError:
         return None
     return amount, parse_account_id(account)
@@ -304,7 +314,7 @@ def parse_admin_create_recurring_transfer(message):
 
     _, amount_text, sender, destination, tick_count_text = body
     try:
-        amount = int(amount_text)
+        amount = Fraction(amount_text)
         tick_count = int(tick_count_text)
     except ValueError:
         return None
@@ -343,7 +353,7 @@ def parse_create_recurring_transfer(message):
 
     _, amount_text, destination, tick_count_text = body
     try:
-        amount = int(amount_text)
+        amount = Fraction(amount_text)
         tick_count = int(tick_count_text)
     except ValueError:
         return None
@@ -985,7 +995,7 @@ COMMANDS = {
         # for development purposes only
         # can't think of a reason why anyone other then a dev would need to run it
         # but I needed it so I could test auto tax so added it as a dev command
-        'forces-ticks AMOUNT',
+        'force-ticks AMOUNT',
         'forces AMOUNT of ticks to happen',
         process_force_tick,
         Authorization.DEVELOPER
