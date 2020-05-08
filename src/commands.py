@@ -209,7 +209,7 @@ def process_authorization(author: AccountId, message: str, server: Server, **kwa
 def fraction_to_str(frac: Fraction) -> str:
     """Turns a fraction into an easy-to-read string."""
     int_amount = frac.numerator // frac.denominator
-    if int_amount <= 0:
+    if int_amount <= 0 and frac.numerator != 0:
         return '%d/%d' % (frac.numerator, frac.denominator)
     elif frac.numerator % frac.denominator == 0:
         return str(int_amount)
