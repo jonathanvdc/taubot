@@ -23,6 +23,7 @@
 
 import random
 import struct
+from fractions import Fraction
 from enum import Enum
 from Crypto.Signature import DSS
 from Crypto.Hash import SHA3_512
@@ -158,7 +159,8 @@ class RequestClient(object):
     async def get_balance(self, send_request) -> bytes:
         """Gets an account's balance."""
         response = await self.get_response('balance', b'', send_request)
-        return struct.unpack('<l', response)[0]
+        numerator, denominator = struct.unpack('<ll', response)
+        return Fraction(numerator, denominator)
 
 
 class ResponseErrorException(Exception):
@@ -284,7 +286,8 @@ class RequestServer(object):
 
 def _handle_balance_request(data: bytes, account: Account, server: Server):
     """Handles an account balance request."""
-    return (StatusCode.SUCCESS, struct.pack('<l', account.get_balance()))
+    balance = account.get_balance()
+    return (StatusCode.SUCCESS, struct.pack('<ll', balance.numerator, balance.denominator))
 
 
 # The server's default request handlers. A request handler takes request data, an account
