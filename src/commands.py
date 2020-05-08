@@ -145,7 +145,7 @@ def process_balance(author: AccountId, message: str, server: Server, **kwargs):
                'You can open one with the `open` command.' % author.readable()
 
     account = server.get_account(author)
-    main_response = 'The balance on your account is %s.' % account.get_balance()
+    main_response = 'The balance on your account is %s.' % fraction_to_str(account.get_balance())
     return 'Hi there %s %s. %s Have a great day.' % (
         account.get_authorization().name.lower(), author.readable(), main_response)
 
@@ -224,14 +224,14 @@ def process_authorization(author: AccountId, message: str, server: Server, **kwa
     server.authorize(author, beneficiary_account, auth_level)
     return '%s now has authorization level %s.' % (beneficiary, auth_level.name)
 
-def fraction_to_str(frac: Fraction) -> str:	
-    """Turns a fraction into an easy-to-read string."""	
-    int_amount = frac.numerator // frac.denominator	
-    if int_amount <= 0 and frac.numerator != 0:	
-        return '%d/%d' % (frac.numerator, frac.denominator)	
-    elif frac.numerator % frac.denominator == 0:	
-        return str(int_amount)	
-    else:	
+def fraction_to_str(frac: Fraction) -> str:
+    """Turns a fraction into an easy-to-read string."""
+    int_amount = frac.numerator // frac.denominator
+    if int_amount <= 0 and frac.numerator != 0:
+        return '%d/%d' % (frac.numerator, frac.denominator)
+    elif frac.numerator % frac.denominator == 0:
+        return str(int_amount)
+    else:
         return '%d %d/%d' % (int_amount, frac.numerator - int_amount * frac.denominator, frac.denominator)
 
 
