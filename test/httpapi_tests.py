@@ -5,6 +5,7 @@ from os import path
 sys.path.append(path.join(path.dirname(
     path.dirname(path.abspath(__file__))), 'src'))
 
+from fractions import Fraction
 import asyncio
 from httpapi import generate_server_key, length_prefix, take_length_prefixed, RequestClient, RequestServer, compose_signed_plaintext_request, DecryptionException
 from accounting import RedditAccountId, InMemoryServer
@@ -115,6 +116,11 @@ class Requests(unittest.TestCase):
         self.assertEqual(
             await msg_client.get_balance(send_request),
             100)
+
+        msg_server.server.print_money(account, account, Fraction('0.114'))
+        self.assertEqual(
+            await msg_client.get_balance(send_request),
+            Fraction('100.114'))
 
 
 if __name__ == '__main__':

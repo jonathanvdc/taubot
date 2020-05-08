@@ -5,6 +5,7 @@ from os import path, remove
 sys.path.append(path.join(path.dirname(
     path.dirname(path.abspath(__file__))), 'src'))
 
+from fractions import Fraction
 from commands import process_command
 from accounting import RedditAccountId, InMemoryServer, Server, Authorization, LedgerServer
 from typing import Sequence
@@ -109,6 +110,21 @@ class CommandTests(unittest.TestCase):
 
             self.assertIn(
                 '123',
+                ''.join(
+                    run_command_stream(
+                        server,
+                        (admin_id, 'balance'))))
+
+    def test_balance_3(self):
+        """Tests that the balance command works for fractional numbers."""
+        for server in create_test_servers():
+            admin_id = RedditAccountId('admin')
+            admin = server.open_account(admin_id)
+            server.authorize(admin_id, admin, Authorization.ADMIN)
+            server.print_money(admin_id, admin, Fraction('123.1'))
+
+            self.assertIn(
+                '123 1/10',
                 ''.join(
                     run_command_stream(
                         server,
