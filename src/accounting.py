@@ -3,6 +3,7 @@ import time
 import os.path
 import random
 import base64
+from fractions import Fraction
 from collections import defaultdict
 from enum import Enum
 from typing import List, Union
@@ -138,7 +139,7 @@ class Account(object):
         """Gets this account's unique identifier."""
         raise NotImplementedError()
 
-    def get_balance(self) -> int:
+    def get_balance(self) -> Fraction:
         """Gets the balance on this account."""
         raise NotImplementedError()
 
@@ -184,15 +185,15 @@ class RecurringTransfer(object):
         """Gets the number of ticks over the course of which the transfer must complete."""
         raise NotImplementedError()
 
-    def get_total_amount(self) -> int:
+    def get_total_amount(self) -> Fraction:
         """Gets the total amount to transfer."""
         raise NotImplementedError()
 
-    def get_remaining_amount(self) -> int:
+    def get_remaining_amount(self) -> Fraction:
         """Gets the remaining amount to transfer."""
         raise NotImplementedError()
 
-    def get_transferred_amount(self) -> int:
+    def get_transferred_amount(self) -> Fraction:
         """Gets the amount of money that has already been transferred."""
         return self.get_total_amount() - self.get_remaining_amount()
 
@@ -245,7 +246,7 @@ class Server(object):
         """Freezes or unfreezes `account` on the authority of `author`."""
         raise NotImplementedError()
 
-    def print_money(self, author: AccountId, account: Account, amount: int):
+    def print_money(self, author: AccountId, account: Account, amount: Fraction):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
         raise NotImplementedError()
 
@@ -276,7 +277,7 @@ class Server(object):
         author: AccountId,
         source: Account,
         destination: Account,
-        total_amount: int,
+        total_amount: Fraction,
         tick_count: int) -> RecurringTransfer:
         """Creates and registers a new recurring transfer, i.e., a transfer that is spread out over
            many ticks. The transfer is authorized by `author` and consists of `total_amount` being
@@ -288,13 +289,13 @@ class Server(object):
         """Notifies the server that a tick has elapsed."""
         raise NotImplementedError()
 
-    def transfer(self, author: AccountId, source: Account, destination: Account, amount: int):
+    def transfer(self, author: AccountId, source: Account, destination: Account, amount: Fraction):
         """Transfers a particular amount of money from one account on this server to another on
            the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
            This action must not complete successfully if the transfer cannot be performed."""
         raise NotImplementedError()
 
-    def can_transfer(self, source: Account, destination: Account, amount: int) -> bool:
+    def can_transfer(self, source: Account, destination: Account, amount: Fraction) -> bool:
         """Tells if a particular amount of money can be transferred from one account on this
            server to another. `destination` and `amount` are both `Account` objects."""
         return amount > 0 and \
@@ -378,11 +379,11 @@ class InMemoryServer(Server):
 
         return not prev_in
 
-    def print_money(self, author: AccountId, account: Account, amount: int):
+    def print_money(self, author: AccountId, account: Account, amount: Fraction):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
         account.balance += amount
 
-    def transfer(self, author: AccountId, source: Account, destination: Account, amount: int):
+    def transfer(self, author: AccountId, source: Account, destination: Account, amount: Fraction):
         """Transfers a particular amount of money from one account on this server to another on
            the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
            This action must not complete successfully if the transfer cannot be performed."""
@@ -414,16 +415,17 @@ class InMemoryServer(Server):
         finished_transfers = set()
         for id in self.recurring_transfers:
             transfer = self.recurring_transfers[id]
-            per_tick = transfer.get_total_amount() // transfer.get_tick_count()
+            per_tick = transfer.get_total_amount() / transfer.get_tick_count()
             if transfer.get_remaining_amount() <= 0:
                 finished_transfers.add(id)
             elif transfer.get_remaining_amount() >= per_tick:
                 if self.can_transfer(transfer.get_source(), transfer.get_destination(), per_tick):
                     self.perform_recurring_transfer(transfer, per_tick)
             else:
-                remaining = transfer.get_total_amount() % per_tick
+                remaining = transfer.get_total_amount()
                 if self.can_transfer(transfer.get_source(), transfer.get_destination(), remaining):
                     self.perform_recurring_transfer(transfer, remaining)
+                    finished_transfers.add(id)
 
         # Delete finished transfers.
         for id in finished_transfers:
@@ -583,7 +585,6 @@ def create_initial_ledger(unannotated_ledger_path, result_path, leading_zero_cou
     with open(result_path, 'w') as f:
         f.writelines(line + '\n' for line in lines)
 
-
 class LedgerServer(InMemoryServer):
     """A server implementation that logs every action in a ledger.
        The ledger can be read to reconstruct the state of the server."""
@@ -644,7 +645,7 @@ class LedgerServer(InMemoryServer):
                     parse_account_id(elems[1]),
                     self.get_account_from_string(elems[2]),
                     self.get_account_from_string(elems[3]),
-                    int(elems[4]))
+                    Fraction(elems[4]))
             elif cmd == 'authorize':
                 super().authorize(
                     parse_account_id(elems[1]),
@@ -659,17 +660,17 @@ class LedgerServer(InMemoryServer):
                 super().print_money(
                     parse_account_id(elems[1]),
                     self.get_account_from_string(elems[2]),
-                    int(elems[3]))
+                    Fraction(elems[3]))
             elif cmd == 'perform-recurring-transfer':
                 super().perform_recurring_transfer(
                     self.get_recurring_transfer(elems[1]),
-                    int(elems[2]))
+                    Fraction(elems[2]))
             elif cmd == 'create-recurring-transfer':
                 rec_transfer = super().create_recurring_transfer(
                     parse_account_id(elems[1]),
                     self.get_account_from_string(elems[2]),
                     self.get_account_from_string(elems[3]),
-                    int(elems[4]),
+                    Fraction(elems[4]),
                     int(elems[5]),
                     elems[6])
             elif cmd == 'add-public-key':
@@ -699,7 +700,7 @@ class LedgerServer(InMemoryServer):
     def _ledger_write(self, *args, t=None):
         if t is None:
             t = time.time()
-        elems = [str(t)] + list(map(str, args))
+        elems = [str(t)] + ['%d/%d' % (x.numerator, x.denominator) if isinstance(x, Fraction) else str(x) for x in args]
         salt, new_hash = generate_salt_and_hash(self.last_hash, elems, self.leading_zero_count)
         with open(self.ledger_path, 'a') as f:
             f.writelines(' '.join([new_hash.hexdigest(), salt] + elems) + '\n')
@@ -771,7 +772,7 @@ class LedgerServer(InMemoryServer):
             self.get_account_id(proxied_account))
         return result
 
-    def print_money(self, author: AccountId, account, amount):
+    def print_money(self, author: AccountId, account, amount: Fraction):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
         super().print_money(author, account, amount)
         self._ledger_write(
@@ -780,7 +781,7 @@ class LedgerServer(InMemoryServer):
             self.get_account_id(account),
             amount)
 
-    def transfer(self, author: AccountId, source, destination, amount):
+    def transfer(self, author: AccountId, source, destination, amount: Fraction):
         """Transfers a particular amount of money from one account on this server to another on
            the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
            This action must not complete successfully if the transfer cannot be performed."""
@@ -798,7 +799,7 @@ class LedgerServer(InMemoryServer):
         super().notify_tick_elapsed()
         self.last_tick_timestamp = self._ledger_write('tick', t=tick_timestamp)
 
-    def create_recurring_transfer(self, author: AccountId, source, destination, total_amount, tick_count, transfer_id=None):
+    def create_recurring_transfer(self, author: AccountId, source, destination, total_amount: Fraction, tick_count: int, transfer_id=None):
         """Creates and registers a new recurring transfer, i.e., a transfer that is spread out over
            many ticks. The transfer is authorized by `author` and consists of `total_amount` being
            transferred from `source` to `destination` over the course of `tick_count` ticks. A tick
@@ -820,103 +821,3 @@ class LedgerServer(InMemoryServer):
             'perform-recurring-transfer',
             transfer.get_id(),
             amount)
-
-
-# TODO: import the backend.
-backend = None
-
-
-class BackendServer(Server):
-    """A server implementation that calls into Mobil's backend."""
-
-    def __init__(self, server_id):
-        """Initializes a backend server."""
-        self.server_id = server_id
-
-    def open_account(self, id, account_uuid=None):
-        """Opens an empty account with a particular ID. Raises an exception if the account
-           already exists. Otherwise returns the newly opened account."""
-        return BackendCitizenAccount(self.server_id, backend.add_account(id, id, self.server_id, True))
-
-    def get_account(self, id) -> Account:
-        """Gets the account that matches an ID. Raises an exception if there is no such account."""
-        return BackendCitizenAccount(self.server_id, id)
-
-    def get_account_ids(self, account):
-        """Gets an account's local IDs. Raises an exception if the account is not registered here."""
-        return [account.account_id if isinstance(account, BackendCitizenAccount) else "@government"]
-
-    def has_account(self, id):
-        """Tests if an account with a particular ID exists on this server."""
-        return backend.account_exists(id, self.server_id)
-
-    def get_government_account(self):
-        """Gets the main government account for this server."""
-        return BackendGovernmentAccount(self.server_id)
-
-    def list_accounts(self):
-        """Lists all accounts on this server."""
-        return [self.get_government_account()] + [self.get_account(id) for id in backend.list_accounts(self.server_id)]
-
-    def authorize(self, author, account, auth_level):
-        """Makes `author` set `account`'s authorization level to `auth_level`."""
-        # FIXME: imperfect match with Mobil's backend API.
-        if auth_level.value > Authorization.CITIZEN:
-            backend.add_local_admin(account.account_id, self.server_id)
-
-    def transfer(self, author, source, destination, amount):
-        """Transfers a particular amount of money from one account on this server to another on
-           the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
-           This action must not complete successfully if the transfer cannot be performed."""
-        if not self.can_transfer(source, destination, amount):
-            raise Exception("Cannot perform transfer.")
-
-        return backend.money_transfer(source.account_id, destination.account_id, amount, self.server_id, False)
-
-
-class BackendCitizenAccount(Account):
-    """An citizen account implementation that calls into Mobil's backend."""
-
-    def __init__(self, server_id, account_id):
-        """Creates a backend account."""
-        self.server_id = server_id
-        self.account_id = account_id
-
-    def get_uuid(self):
-        """Gets this account's unique identifier."""
-        return backend.id_to_uuid(self.account_id)
-
-    def get_balance(self):
-        """Gets the balance on this account."""
-        return backend.get_account_balance(self.account_id, self.server_id)
-
-    def is_frozen(self):
-        """Tells if this account is frozen."""
-        return backend.is_locked(self.account_id, self.server_id)
-
-    def get_authorization(self):
-        """Gets this account's level of authorization."""
-        return backend.auth_level(self.account_id, self.server_id)
-
-
-class BackendGovernmentAccount(Account):
-    """An government account implementation that calls into Mobil's backend."""
-
-    def __init__(self, server_id):
-        self.server_id = server_id
-
-    def get_uuid(self):
-        """Gets this account's unique identifier."""
-        raise NotImplementedError()
-
-    def get_balance(self):
-        """Gets the balance on this account."""
-        return backend.get_govt_balance(self.server_id)
-
-    def is_frozen(self):
-        """Tells if this account is frozen."""
-        return False
-
-    def get_authorization(self):
-        """Gets this account's level of authorization."""
-        return Authorization.CITIZEN
