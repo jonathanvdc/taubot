@@ -6,9 +6,12 @@ import json
 import time
 import asyncio
 import traceback
+from aiohttp import web
 from accounting import LedgerServer, Authorization, RedditAccountId, DiscordAccountId, AccountId
 from commands import COMMANDS, list_commands_as_markdown, CommandException, assert_authorized, process_command
 from utils import split_into_chunks, discord_postprocess
+from httpapi import RequestServer
+from Crypto.PublicKey import RSA
 
 # move this to config?
 prefix = "e!"
@@ -101,7 +104,6 @@ if __name__ == '__main__':
     reddit = create_reddit(config)
     discord_client = discord.Client()
 
-    # This is our main message callback.
     @discord_client.event
     async def on_message(message):
         if message.author == discord_client.user:
@@ -115,7 +117,7 @@ if __name__ == '__main__':
 
         if content.startswith(prefixes): # Checking all messages that start with the prefix.
             prefix = [prefix for prefix in prefixes if content.startswith(prefix)][0]
-            command_content = content[len(prefix):].lstrip()
+            command_content = content[len(prefix):].lstrip().lower()
             response = discord_postprocess(
                 process_command(
                     DiscordAccountId(str(message.author.id)),
@@ -136,9 +138,20 @@ if __name__ == '__main__':
             await message.channel.send(embed=embed)
 
     with LedgerServer('ledger.txt') as server:
+        loop = asyncio.get_event_loop()
+
+        # Run the Reddit bot.
         asyncio.get_event_loop().create_task(tick_loop(server))
         asyncio.get_event_loop().create_task(message_loop(reddit, server))
         asyncio.get_event_loop().create_task(comment_loop(reddit, server))
+
+        # Run the HTTP server.
+        if 'server_key' in config:
+            app = web.Application()
+            app.router.add_get('/', RequestServer(server, RSA.import_key(config['server_key'])).handle_request)
+            loop.create_task(web._run_app(app))
+
+        # Run the Discord bot.
         if 'discord_token' in config:
             discord_client.run(config['discord_token'])
         else:
