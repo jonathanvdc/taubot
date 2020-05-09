@@ -126,27 +126,28 @@ if __name__ == '__main__':
     discord_client = discord.Client()
 
     try:
-        prefix = config["prefix"]
+        config_prefix = config["prefix"]
     except Exception as e:
         print_bad("prefix")
-        prefix = None
+        config_prefix = None
 
     @discord_client.event
     async def on_message(message):
         if message.author == discord_client.user:
             return
-        global prefix
+        global config_prefix
 
         content = message.content.lstrip()
 
         prefixes = (
             '<@%s>' % discord_client.user.id,
-            '<@!%s>' % discord_client.user.id,
-            prefix.lower()
-        ) if prefix is not None else (  # TODO: create a more elegant solution this one feels a bit botched
-            '<@%s>' % discord_client.user.id,
-            '<@!%s>' % discord_client.user.id
-        )
+            '<@!%s>' % discord_client.user.id)
+
+        if config_prefix is not None:
+            if isinstance(config_prefix, (list, tuple)):
+                prefixes += tuple(config_prefix)
+            else:
+                prefixes += (config_prefix.lower(),)
 
         if content.lower().startswith(prefixes): # Checking all messages that start with the prefix.
             prefix = [prefix for prefix in prefixes if content.lower().startswith(prefix)][0]
