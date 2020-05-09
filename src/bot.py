@@ -142,7 +142,7 @@ if __name__ == '__main__':
         prefixes = (
             '<@%s>' % discord_client.user.id,
             '<@!%s>' % discord_client.user.id,
-            prefix
+            prefix.lower()
         ) if prefix is not None else (  # TODO: create a more elegant solution this one feels a bit botched
             '<@%s>' % discord_client.user.id,
             '<@!%s>' % discord_client.user.id
