@@ -98,22 +98,55 @@ async def comment_loop(reddit, server):
 
         # Sleep for five seconds.
         await asyncio.sleep(5)
+def print_bad(item):
+    # TODO: make less sloppy
+    print(f'\n[WARN] the necessary keys to create the {item} were not found or were invalid degrading to running without {item} functionality')
+    print(f'[WARN] if you wish to run with {item} functionality fill the bot-config.json with the necessary keys found here: ')
+    print(f'[WARN] https://github.com/jonathanvdc/taubot/blob/master/README.md, or in the README attached')
 
 if __name__ == '__main__':
+    print("[Main] Launching")
+    required_reddit_keys = [
+        'reddit_client_id',
+        'reddit_client_secret',
+        'reddit_username',
+        'reddit_password'
+    ]
+
     config = read_config()
-    reddit = create_reddit(config)
+    # checks if all the necessary keys exist to create a Reddit object
+    # this allows for graceful degradation if the necessary keys are not present
+    # however if the content is invalid the program will still crash
+    # TODO: stop program from crashing if reddit data is invalid
+    if set(required_reddit_keys).issubset(set(config.keys())):
+            reddit = create_reddit(config)
+    else:
+        print_bad("Reddit Bot")
+        reddit = None
     discord_client = discord.Client()
+
+    try:
+        prefix = config["prefix"]
+    except Exception as e:
+        print_bad("prefix")
+        prefix = None
 
     @discord_client.event
     async def on_message(message):
         if message.author == discord_client.user:
             return
+        global prefix
 
         content = message.content.lstrip()
+
         prefixes = (
             '<@%s>' % discord_client.user.id,
             '<@!%s>' % discord_client.user.id,
-            'e!')
+            prefix
+        ) if prefix is not None else (  # TODO: create a more elegant solution this one feels a bit botched
+            '<@%s>' % discord_client.user.id,
+            '<@!%s>' % discord_client.user.id
+        )
 
         if content.lower().startswith(prefixes): # Checking all messages that start with the prefix.
             prefix = [prefix for prefix in prefixes if content.lower().startswith(prefix)][0]
@@ -126,7 +159,12 @@ if __name__ == '__main__':
                     prefixes[0] + ' '))
 
             chunks = split_into_chunks(response.encode('utf-8'), 1024)
-            embed = discord.Embed(color=0x3b4dff)
+            try:
+                embed = discord.Embed(color=int(config["colour"], base=16))
+            except Exception as e:
+                print_bad("Embed Colour")
+                embed = discord.Embed()
+                pass
             title = command_content.split()[0] if len(command_content.split()) > 0 else 'Empty Message'
             for i, chunk in enumerate(chunks):
                 title = "(cont'd)" if i > 0 else title
@@ -139,20 +177,29 @@ if __name__ == '__main__':
 
     with LedgerServer('ledger.txt') as server:
         loop = asyncio.get_event_loop()
-
+        from prawcore.exceptions import *
         # Run the Reddit bot.
         asyncio.get_event_loop().create_task(tick_loop(server))
-        asyncio.get_event_loop().create_task(message_loop(reddit, server))
-        asyncio.get_event_loop().create_task(comment_loop(reddit, server))
+        if reddit is not None:
+            asyncio.get_event_loop().create_task(message_loop(reddit, server))
+            asyncio.get_event_loop().create_task(comment_loop(reddit, server))
+
+
 
         # Run the HTTP server.
         if 'server_key' in config:
             app = web.Application()
             app.router.add_get('/', RequestServer(server, RSA.import_key(config['server_key'])).handle_request)
             loop.create_task(web._run_app(app))
+        else:
+            print_bad('api')
 
         # Run the Discord bot.
         if 'discord_token' in config:
-            discord_client.run(config['discord_token'])
+            try:
+                discord_client.run(config['discord_token'])
+            except discord.errors.LoginFailure as e:
+                print_bad("Discord Bot")
         else:
+            print_bad("Discord Bot")
             asyncio.get_event_loop().run_forever()
