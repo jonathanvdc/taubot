@@ -151,6 +151,11 @@ def process_balance(author: AccountId, message: str, server: Server, **kwargs):
         account.get_authorization().name.lower(), author.readable(), main_response)
 
 
+def process_money_supply(author: AccountId, message: str, server: Server, **kwargs):
+    """Processes a message requesting the total money supply."""
+    main_response = 'The total money supply is %s.' % fraction_to_str(sum(account.get_balance() for account in server.get_accounts()))
+    return 'Hi there. %s Have a great day.' % main_response
+
 def process_add_public_key(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a message that requests for a public key to be associated with an account."""
     account = assert_is_account(author, server)
@@ -854,6 +859,11 @@ COMMANDS = {
         'balance',
         'prints the balance on your account.',
         process_balance
+    ),
+    'money-supply': (
+        'money-supply',
+        'tallies the total money supply.',
+        process_money_supply
     ),
     'add-public-key': (
         'add-public-key',

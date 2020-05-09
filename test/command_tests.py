@@ -130,6 +130,24 @@ class CommandTests(unittest.TestCase):
                         server,
                         (admin_id, 'balance'))))
 
+    def test_money_supply(self):
+        """Tests that the money-supply command works."""
+        for server in create_test_servers():
+            admin_id = RedditAccountId('admin')
+            user_id = RedditAccountId('general-kenobi')
+            admin = server.open_account(admin_id)
+            server.authorize(admin_id, admin, Authorization.ADMIN)
+            server.print_money(admin_id, admin, Fraction('123.1'))
+            user = server.open_account(user_id)
+            server.print_money(user_id, user, Fraction('123'))
+
+            self.assertIn(
+                '246 1/10',
+                ''.join(
+                    run_command_stream(
+                        server,
+                        (admin_id, 'money-supply'))))
+
     def test_authorize(self):
         """Tests that a user can be authorized as a citizen, admin or developer."""
         for server in create_test_servers():

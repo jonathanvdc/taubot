@@ -217,6 +217,10 @@ class Server(object):
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         raise NotImplementedError()
 
+    def get_accounts(self) -> List[Account]:
+        """Gets a list of all accounts on this server."""
+        raise NotImplementedError()
+
     def get_account_from_string(self, id: str) -> Account:
         """Gets the account that matches a string ID. Raises an exception if there is no such account."""
         return self.get_account(parse_account_id(id))
@@ -354,6 +358,10 @@ class InMemoryServer(Server):
     def get_account(self, id: AccountId) -> Account:
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         return self.accounts[unwrap_proxies(id)]
+
+    def get_accounts(self) -> List[Account]:
+        """Gets a list of all accounts on this server."""
+        return list(set(self.accounts.values()))
 
     def get_account_ids(self, account: Account) -> List[AccountId]:
         """Gets an account's local IDs. Raises an exception if the account is not registered here."""
