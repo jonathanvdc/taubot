@@ -816,7 +816,7 @@ class LedgerServer(InMemoryServer):
                 super().remove_funds(
                     self.get_account_from_string(elems[1]),
                     self.get_account_from_string(elems[2]),
-                    int(elems[3])
+                    Fraction(elems[3])
                 )
             elif cmd == 'perform-recurring-transfer':
                 super().perform_recurring_transfer(
