@@ -571,14 +571,34 @@ def process_admin_remove_proxy(author: AccountId, message: str, server: Server, 
     assert_authorized(author, server, Authorization.ADMIN)
     parsed = parse_admin_add_proxy_command(message)
     if parsed is None:
-        raise CommandException(
-            'Incorrect formatting. Expected format `admin-remove-proxy ACCOUNT_NAME PROXIED_ACCOUNT_NAME`.')
+        raise CommandException('Incorrect formatting. Expected format `admin-remove-proxy ACCOUNT_NAME PROXIED_ACCOUNT_NAME`.')
 
     account_name, proxied_account_name = parsed
     account = assert_is_account(account_name, server)
     proxied_account = assert_is_account(proxied_account_name, server)
     server.remove_proxy(author, account, proxied_account)
     return 'Account %s can no longer act as a proxy for account %s.' % (account_name, proxied_account_name)
+
+def parse_admin_list_proxies(message: str):
+    body = message.split()
+    if len(body) != 2:
+        return None
+    _, account = body
+
+    return account
+
+def proccess_admin_list_proxies(author: AccountId, message: str, server: Server, **kwargs):
+    """ Lists all of the accounts that can act as the given account."""
+    assert_authorized(author, server, Authorization.ADMIN)
+    parsed = parse_admin_list_proxies(message)
+    if parsed is None:
+        raise CommandException('Bad Formating smh')
+    account = assert_is_account(parsed, server)
+    response = '| -------------------------- |\n'
+    for proxy in account.get_proxies():
+        response += f'| {str(server.get_account_id(proxy))} |\n'
+    response += '| -------------------------- |\n'
+    return response
 
 
 def parse_delete_account(message):
@@ -1010,6 +1030,12 @@ COMMANDS = {
         'forces AMOUNT of ticks to happen',
         process_force_tick,
         Authorization.DEVELOPER
+    ),
+    'list-proxies': (
+        'list-proxies ACCOUNT',
+        'lists all of the accounts that can act on behalf of ACCOUNT',
+        proccess_admin_list_proxies,
+        Authorization.ADMIN
     )
 
 }
