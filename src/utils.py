@@ -27,23 +27,6 @@ def discord_postprocess(message: str) -> str:
        replacing double newlines with single newlines this also entails
        turning discord account names into mentions"""
     message = message.replace('\n\n', '\n')
-    lines = message.split('\n')
-    line_index = 0
-    for line in lines:
-        words = line.split()
-        index = 0
-        for word in words:
-            if word.startswith('discord/'):  # the name command will still run because the result is enclosed in back ticks so this would be read as `discord/ and not discord/
-                words[index] = f'<@{word.strip("discord/")}>'
-            index += 1
-        line = ''
-        for word in words:
-            line += word + ' '
-        lines[line_index] = line
-        line_index += 1
-
-
-    message = ''
-    for line in lines:
-        message += line + '\n'
-    return message
+    return '\n'.join(
+        ' '.join(f'<@{word.strip("discord/")}>' if word.startswith('discord/') else word for word in line.split())
+        for line in message.split('\n'))
