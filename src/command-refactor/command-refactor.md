@@ -3,10 +3,11 @@
 ## REASONING
 
 Figure 1. Current situation in which each boundary entity has to implement commands separately
-![Figure 1](figures/1.png)
+![Figure 1](1.png)
 
 Figure 2. Optimal situation in which each boundary entity calls a command routing in a command library
-![Figure 2](figures/2.png)
+![Figure 2](2.png)
+
 Currently, the `commands.py` file provides very discord-centered functionality, causing any additional API that has to be added (say HTTP) to have to reimplement those commands. The goal of this project is to create a new improved `commands.py` which is cliehnt-agnostic and works regardless of medium.
 
 ## METHODS
