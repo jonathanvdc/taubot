@@ -98,7 +98,6 @@ def process_open_account(author: AccountId, message: str, server: Server, prefix
     server.open_account(author)
     return 'Hi there %s. Your account has been opened successfully. Thank you for your business. %s' % (author.readable(), get_generic_help_message(author, prefix, platform_name))
 
-
 def parse_account_name_command(message: str) -> str:
     """Parses a command that has a single parameter: an account name."""
     body = message.split()
@@ -187,7 +186,8 @@ def assert_authorized(account_name: Union[str, AccountId], server: Server, auth_
     account = assert_is_account(account_name, server)
 
     if account.get_authorization().value < auth_level.value:
-        raise CommandException('Sorry, I can\'t process your request because %s does not have the required authorization.' % account_name.readable())
+        raise CommandException(
+            'Sorry, I can\'t process your request because %s does not have the required authorization.' % account_name.readable())
 
     return account
 
@@ -211,7 +211,8 @@ def process_authorization(author: AccountId, message: str, server: Server, **kwa
     author_account = assert_authorized(author, server, Authorization.ADMIN)
     parsed = parse_authorization(message)
     if parsed is None:
-        raise CommandException('Authorization formatted incorrectly. The right format is `authorize BENEFICIARY citizen|admin|developer`.')
+        raise CommandException(
+            'Authorization formatted incorrectly. The right format is `authorize BENEFICIARY citizen|admin|developer`.')
 
     beneficiary, auth_level = parsed
     beneficiary_account = assert_is_account(beneficiary, server)
@@ -229,6 +230,7 @@ def process_authorization(author: AccountId, message: str, server: Server, **kwa
 
     server.authorize(author, beneficiary_account, auth_level)
     return '%s now has authorization level %s.' % (beneficiary, auth_level.name)
+
 
 def fraction_to_str(frac: Fraction) -> str:
     """Turns a fraction into an easy-to-read string."""
@@ -415,7 +417,8 @@ def parse_proxy_command(message):
 
     result = parse_impl()
     if result == None:
-        raise CommandException('Invalid formatting; expected either `proxy PROXIED_ACCOUNT` or `proxy dsa PROXIED_ACCOUNT SIGNATURE` followed by another command on the next line.')
+        raise CommandException(
+            'Invalid formatting; expected either `proxy PROXIED_ACCOUNT` or `proxy dsa PROXIED_ACCOUNT SIGNATURE` followed by another command on the next line.')
     else:
         return result
 
@@ -571,13 +574,15 @@ def process_admin_remove_proxy(author: AccountId, message: str, server: Server, 
     assert_authorized(author, server, Authorization.ADMIN)
     parsed = parse_admin_add_proxy_command(message)
     if parsed is None:
-        raise CommandException('Incorrect formatting. Expected format `admin-remove-proxy ACCOUNT_NAME PROXIED_ACCOUNT_NAME`.')
+        raise CommandException(
+            'Incorrect formatting. Expected format `admin-remove-proxy ACCOUNT_NAME PROXIED_ACCOUNT_NAME`.')
 
     account_name, proxied_account_name = parsed
     account = assert_is_account(account_name, server)
     proxied_account = assert_is_account(proxied_account_name, server)
     server.remove_proxy(author, account, proxied_account)
     return 'Account %s can no longer act as a proxy for account %s.' % (account_name, proxied_account_name)
+
 
 def parse_admin_list_proxies(message: str):
     body = message.split()
@@ -586,6 +591,7 @@ def parse_admin_list_proxies(message: str):
     _, account = body
 
     return account
+
 
 def proccess_admin_list_proxies(author: AccountId, message: str, server: Server, **kwargs):
     """ Lists all of the accounts that can act as the given account."""
@@ -804,6 +810,27 @@ def process_auto_tax(author: AccountId, message: str, server: Server, **kwargs):
     assert_authorized(author, server, Authorization.ADMIN)
     ans = server.toggle_auto_tax(author)
     return f"set auto tax attribute in tax object to {ans}"
+
+
+def parse_test_tax_income(message: str):
+    content = message.split()
+    if len(content) > 2:
+        raise CommandException('learn to format smh')
+    if len(content) == 1:
+        return None
+
+    _, bracket = content
+    return bracket
+
+
+def process_test_tax_income(author: AccountId, message: str, server: Server, **kwargs):
+    assert_authorized(author, server, Authorization.ADMIN)
+    bracket = parse_test_tax_income(message)
+    try:
+        value = server.get_bracket_value(bracket)
+    except KeyError as e:
+        return f"`{bracket}` does not exist smh"
+    return f'the value of {bracket if bracket is not None else "all the tax brackets combined"} is {value}, I hope you are not considering tax cus that would be theft'
 
 
 def parse_force_tick(message):
@@ -1035,6 +1062,12 @@ COMMANDS = {
         'list-proxies ACCOUNT',
         'lists all of the accounts that can act on behalf of ACCOUNT',
         proccess_admin_list_proxies,
+        Authorization.ADMIN
+    ),
+    'test-tax-income': (
+        'test-tax-income <Tax Bracket>',
+        'gets the amount of money earned if `Tax Bracket` is not supplied it will show the sum of all tax brackets',
+        process_test_tax_income,
         Authorization.ADMIN
     )
 
