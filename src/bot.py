@@ -6,6 +6,7 @@ import json
 import time
 import asyncio
 import traceback
+import sys
 from aiohttp import web
 from accounting import LedgerServer, Authorization, RedditAccountId, DiscordAccountId, AccountId
 from commands import COMMANDS, list_commands_as_markdown, CommandException, assert_authorized, process_command
@@ -18,7 +19,11 @@ prefix = "e!"
 
 def read_config():
     """Reads the configuration file."""
-    with open('bot-config.json') as f:
+    if len(sys.argv) > 2:
+        print('Usage: bot.py [/path/to/bot-config.json]', file=sys.stderr)
+        sys.exit(1)
+
+    with open(sys.argv[1] if len(sys.argv) == 2 else 'bot-config.json') as f:
         return json.load(f)
 
 def create_reddit(config):
@@ -176,7 +181,8 @@ if __name__ == '__main__':
 
             await message.channel.send(embed=embed)
 
-    with LedgerServer('ledger.txt') as server:
+    ledger_path = config['ledger-path'] if 'ledger-path' in config else 'ledger.txt'
+    with LedgerServer(ledger_path) as server:
         loop = asyncio.get_event_loop()
         from prawcore.exceptions import *
         # Run the Reddit bot.
@@ -184,8 +190,6 @@ if __name__ == '__main__':
         if reddit is not None:
             asyncio.get_event_loop().create_task(message_loop(reddit, server))
             asyncio.get_event_loop().create_task(comment_loop(reddit, server))
-
-
 
         # Run the HTTP server.
         if 'server_key' in config:
