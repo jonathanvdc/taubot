@@ -6,7 +6,7 @@ import base64
 from fractions import Fraction
 from collections import defaultdict
 from enum import Enum
-from typing import List, Union
+from typing import List, Union, Dict, Any
 from Crypto.Hash import SHA3_256
 from Crypto.PublicKey import ECC
 
@@ -431,12 +431,14 @@ class InMemoryServer(Server):
         """Produces a list of all recurring transfers."""
         return self.recurring_transfers.values()
 
-    def create_recurring_transfer(self, author: AccountId, source, destination, total_amount, tick_count, transfer_id=None):
+    def create_recurring_transfer(self, author: AccountId, source, destination, total_amount, tick_count,
+                                  transfer_id=None):
         """Creates and registers a new recurring transfer, i.e., a transfer that is spread out over
            many ticks. The transfer is authorized by `author` and consists of `total_amount` being
            transferred from `source` to `destination` over the course of `tick_count` ticks. A tick
            is a server-defined timespan."""
-        rec_transfer = InMemoryRecurringTransfer(author, source, destination, total_amount, tick_count, total_amount, transfer_id)
+        rec_transfer = InMemoryRecurringTransfer(author, source, destination, total_amount, tick_count, total_amount,
+                                                 transfer_id)
         self.recurring_transfers[rec_transfer.get_id()] = rec_transfer
         return rec_transfer
 
@@ -626,7 +628,7 @@ class WealthTaxBracket:
 
     def __init__(self, start, end, rate, exempt_prefixes=None):
         if exempt_prefixes is None:
-            exempt_prefixes = ['&', '@'] # default prefixes for government and non-profits
+            exempt_prefixes = ['&', '@']  # default prefixes for government and non-profits
         self.start = start
         self.end = end
         self.tax_rate = rate
@@ -669,12 +671,12 @@ class WealthTaxBracket:
             return tax_amount
 
 
-
 class TaxException(Exception):
     pass
 
 
 class TaxMan:
+
     def __init__(self, server, tax_regularity=28, auto_tax=False):
         self.tax_brackets = {}
         self.ticks_till_tax = tax_regularity
@@ -682,14 +684,11 @@ class TaxMan:
         self.server = server
         self.autoTax = auto_tax
 
-
     def get_bracket(self, name):
         return self.tax_brackets[name]
 
-
     def add_tax_bracket(self, min_amount, max_amount, rate, name):
         self.tax_brackets[name] = WealthTaxBracket(min_amount, max_amount, rate)
-        print(self.tax_brackets)
 
     def remove_tax_bracket(self, name):
         try:
@@ -720,13 +719,30 @@ class TaxMan:
         self.autoTax = not self.autoTax
         return self.autoTax
 
+    def get_bracket_value(self, bracket=None):
+        value = 0
+        if bracket is not None:
+            brackets = [bracket]
+        else:
+            brackets = self.tax_brackets.keys()
+
+        for key in brackets:
+            for account in self.server.list_accounts():
+                if self.server.get_account_id(account).startswith(
+                    tuple(self.tax_brackets[key].exempt_prefixes)): continue
+                value += self.tax_brackets[key].get_tax(account)
+
+        return value
+
     def tax(self):
         self.ticks_till_tax_tmp = self.ticks_till_tax
         i = 0
-        for account in self.server.list_accounts():
-            i +=1
-            for tax_bracket in self.tax_brackets:
-                if self.server.get_account_id(account).startswith(tuple(self.tax_brackets[tax_bracket].exempt_prefixes)): continue
+        for tax_bracket in self.tax_brackets:
+            for account in self.server.list_accounts():
+                i += 1
+
+                if self.server.get_account_id(account).startswith(
+                    tuple(self.tax_brackets[tax_bracket].exempt_prefixes)): continue
                 tax_amount = self.tax_brackets[tax_bracket].get_tax(account)
                 if tax_amount != 0:
                     self.server.transfer('@government', account, self.server.get_government_account(), tax_amount)
@@ -758,7 +774,6 @@ class LedgerServer(InMemoryServer):
     def close(self):
         """Closes the server's underlying ledger file."""
         self.ledger_file.close()
-
 
     def _read_ledger(self, ledger_path):
         """Reads a ledger at a particular path."""
@@ -855,7 +870,8 @@ class LedgerServer(InMemoryServer):
             elif cmd == 'delete-account':
                 super().delete_account(elems[2])
             elif cmd == 'add-tax-bracket':
-                self.get_tax_object().add_tax_bracket(int(elems[2]), int(elems[3]) if elems[3] != "None" else None, int(elems[4]), str(elems[5]))
+                self.get_tax_object().add_tax_bracket(int(elems[2]), int(elems[3]) if elems[3] != "None" else None,
+                                                      int(elems[4]), str(elems[5]))
             elif cmd == 'remove-tax-bracket':
                 self.get_tax_object().remove_tax_bracket(elems[2])
             elif cmd == 'toggle-auto-tax':
@@ -969,6 +985,9 @@ class LedgerServer(InMemoryServer):
             author
         )
 
+    def get_bracket_value(self, bracket=None) -> int:
+        return self.get_tax_object().get_bracket_value(bracket=bracket)
+
     def toggle_auto_tax(self, author) -> bool:
         ans = self.get_tax_object().toggle_auto_tax()
         self._ledger_write(
@@ -982,7 +1001,6 @@ class LedgerServer(InMemoryServer):
         self._ledger_write(
             'add-exempt-prefix'
         )
-
 
     def remove_proxy(self, author: AccountId, account: Account, proxied_account: Account) -> bool:
         """Ensures that `account` is not a proxy for `proxied_account`. Returns
@@ -1034,12 +1052,14 @@ class LedgerServer(InMemoryServer):
         self.taxObject.tick()
         self.last_tick_timestamp = self._ledger_write('tick', t=tick_timestamp)
 
-    def create_recurring_transfer(self, author: AccountId, source, destination, total_amount: Fraction, tick_count: int, transfer_id=None):
+    def create_recurring_transfer(self, author: AccountId, source, destination, total_amount: Fraction, tick_count: int,
+                                  transfer_id=None):
         """Creates and registers a new recurring transfer, i.e., a transfer that is spread out over
            many ticks. The transfer is authorized by `author` and consists of `total_amount` being
            transferred from `source` to `destination` over the course of `tick_count` ticks. A tick
            is a server-defined timespan."""
-        rec_transfer = super().create_recurring_transfer(author, source, destination, total_amount, tick_count, transfer_id)
+        rec_transfer = super().create_recurring_transfer(author, source, destination, total_amount, tick_count,
+                                                         transfer_id)
         self._ledger_write(
             'create-recurring-transfer',
             author,
