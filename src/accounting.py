@@ -602,6 +602,10 @@ def create_initial_ledger_entries(entries, leading_zero_count=12, initial_hash=b
     last_hash = initial_hash
     results = []
     for line in entries:
+        if not line.strip():
+            results.append(line)
+            continue
+
         elems = line.split()
         salt, line_hash = generate_salt_and_hash(last_hash, elems, leading_zero_count)
         results.append(' '.join([line_hash.hexdigest(), salt] + elems))
@@ -610,17 +614,34 @@ def create_initial_ledger_entries(entries, leading_zero_count=12, initial_hash=b
     return results
 
 
+def strip_ledger_hashes_and_salts(entries):
+    """Strips hashes and salts from ledger entries."""
+    return [
+        ' '.join(entry.split()[2:])
+        for entry in entries
+    ]
+
+
+def rewrite_ledger(source_path, destination_path, func):
+    """Rewrites a ledger by reading it from a source path, applying a function to it and
+       writing it to a destination path."""
+    with open(source_path, 'r') as f:
+        lines = f.readlines()
+
+    lines = func(lines)
+
+    with open(destination_path, 'w') as f:
+        f.writelines(line + '\n' for line in lines)
+
+
 def create_initial_ledger(unannotated_ledger_path, result_path, leading_zero_count=12, initial_hash=b''):
     """Creates an initial ledger by reading the unannotated ledger at `unannoted_ledger_path`,
        annotating every line with a hash and a salt and then writing the result to
        `result_path`."""
-    with open(unannotated_ledger_path, 'r') as f:
-        lines = f.readlines()
-
-    lines = create_initial_ledger_entries(lines, leading_zero_count, initial_hash)
-
-    with open(result_path, 'w') as f:
-        f.writelines(line + '\n' for line in lines)
+    return rewrite_ledger(
+        unannotated_ledger_path,
+        result_path,
+        lambda lines: create_initial_ledger_entries(lines, leading_zero_count, initial_hash))
 
 
 class WealthTaxBracket:

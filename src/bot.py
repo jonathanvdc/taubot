@@ -103,6 +103,7 @@ async def comment_loop(reddit, server):
 
         # Sleep for five seconds.
         await asyncio.sleep(5)
+
 def print_bad(item):
     # TODO: make less sloppy
     print(f'\n[WARN] the necessary keys to create the {item} were not found or were invalid degrading to running without {item} functionality')
