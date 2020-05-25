@@ -138,6 +138,27 @@ def process_admin_unfreeze(author: AccountId, message: str, server: Server, **kw
     return 'Account %s was unfrozen successfully.' % account_name
 
 
+def fraction_to_full_str(frac: Fraction) -> str:
+    """Turns a fraction into an easy-to-read string."""
+    int_amount = frac.numerator // frac.denominator
+    if int_amount <= 0 and frac.numerator != 0:
+        return '%d/%d' % (frac.numerator, frac.denominator)
+    elif frac.numerator % frac.denominator == 0:
+        return str(int_amount)
+    else:
+        return '%d %d/%d' % (int_amount, frac.numerator - int_amount * frac.denominator, frac.denominator)
+
+def process_full_balance(author: AccountId, message: str, server: Server, **kwargs):
+    if not server.has_account(author):
+        return 'Hi there %s. I can\'t tell you what the balance on your account is because you don\'t have an account yet. ' \
+               'You can open one with the `open` command.' % author.readable()
+
+    account = server.get_account(author)
+    main_response = 'The balance on your account is %s.' % fraction_to_full_str(account.get_balance())
+    return 'Hi there %s %s. %s Have a great day.' % (
+        account.get_authorization().name.lower(), author.readable(), main_response)
+
+
 def process_balance(author: AccountId, message: str, server: Server, **kwargs):
     """Processes a message requesting the balance on an account."""
     if not server.has_account(author):
@@ -234,13 +255,8 @@ def process_authorization(author: AccountId, message: str, server: Server, **kwa
 
 def fraction_to_str(frac: Fraction) -> str:
     """Turns a fraction into an easy-to-read string."""
-    int_amount = frac.numerator // frac.denominator
-    if int_amount <= 0 and frac.numerator != 0:
-        return '%d/%d' % (frac.numerator, frac.denominator)
-    elif frac.numerator % frac.denominator == 0:
-        return str(int_amount)
-    else:
-        return '%d %d/%d' % (int_amount, frac.numerator - int_amount * frac.denominator, frac.denominator)
+    int_amount = frac.numerator / frac.denominator
+    return str(round(int_amount, 2))
 
 
 def process_list_accounts(author: AccountId, message: str, server: Server, **kwargs):
@@ -849,6 +865,9 @@ def parse_force_tick(message):
     return amount
 
 
+
+
+
 def process_force_tick(author: AccountId, message: str, server: Server, **kwargs):
     assert_authorized(author, server, Authorization.DEVELOPER)
     parsed = parse_force_tick(message)
@@ -887,6 +906,12 @@ COMMANDS = {
         'prints a command reference message.',
         process_reference
     ),
+    'full-balance': (
+        'full-balance',
+        'displays your full balance',
+        process_full_balance
+    ),
+
     'help': (
         'help',
         'prints a help message.',
