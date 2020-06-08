@@ -892,7 +892,9 @@ ALIASES = {
     'ref': 'reference',
     'bal': 'balance',
     'authorise': 'authorize',
-    'prxy': 'proxy'
+    'prxy': 'proxy',
+    'fullbal': 'full-balance',
+    'full-bal': 'full-balance'
 }
 
 # A list of the commands accepted by the bot. Every command
