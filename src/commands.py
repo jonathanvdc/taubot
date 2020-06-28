@@ -1,3 +1,5 @@
+import time
+import base64
 from Accounting import Server, Account, AccountId, Authorization
 from Accounting import parse_account_id
 from fractions import Fraction
@@ -5,7 +7,6 @@ from typing import Union, Optional
 from Crypto.PublicKey import ECC
 from Crypto.Signature import DSS
 from Crypto.Hash import SHA3_512
-import base64
 
 
 # EXCEPTIONS
@@ -334,7 +335,7 @@ def remove_proxy(
     proxy = _get_account(proxy, server)
     _assert_authorized(author)
 
-   server.remove_proxy(author, proxy, account)
+    server.remove_proxy(author, proxy, account)
 
 
 def delete_account(
@@ -383,9 +384,9 @@ def auto_tax(author: Union[AccountId, str], server: Server) -> bool:
 
 def force_ticks(
         author: Union[AccountId, str],
-        amount: int, sever: Server):
+        amount: int, server: Server):
     """Forcibly run multiple ticks"""
     author = _get_account(author, server)
-    _assert_authorized(account)
+    _assert_authorized(author)
     for i in range(amount):
         server.notify_tick_elapsed(time.time())
