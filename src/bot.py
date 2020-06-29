@@ -8,7 +8,7 @@ import asyncio
 import traceback
 from aiohttp import web
 from accounting import LedgerServer, Authorization, RedditAccountId, DiscordAccountId, AccountId
-from commands import COMMANDS, list_commands_as_markdown, CommandException, assert_authorized, process_command
+from old_commands import COMMANDS, list_commands_as_markdown, CommandException, assert_authorized, process_command
 from utils import split_into_chunks, discord_postprocess
 from httpapi import RequestServer
 from Crypto.PublicKey import RSA

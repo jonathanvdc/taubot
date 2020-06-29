@@ -1,9 +1,9 @@
 import time
 import base64
-from Accounting import Server, Account, AccountId, Authorization
-from Accounting import parse_account_id
+from accounting import Server, Account, AccountId, Authorization
+from accounting import parse_account_id
 from fractions import Fraction
-from typing import Union, Optional
+from typing import Union, Optional, List
 from Crypto.PublicKey import ECC
 from Crypto.Signature import DSS
 from Crypto.Hash import SHA3_512
@@ -58,12 +58,12 @@ def _check_authorization(
        Authorization.ADMIN)
        """
     # Admin-authorization
-    if subject.get_authorization().value < admin_level.value:
+    if subject.get_authorization().value >= admin_level.value:
         return True
 
     # Self-authorization
-    elif subject.get_uuid() == object.get_uuid():
-        return True
+    elif object and subject.get_uuid() == object.get_uuid():
+        return subject.get_authorization() >= min_level
 
     # Proxying?
 
@@ -142,7 +142,7 @@ def open_account(
     if server.has_account(account):
         raise ValueCommandException(account)
     if server.has_account(author):
-        _assert_authorized(author)
+        _assert_authorized(_get_account(author, server), None)
     server.open_account(account)
 
 
@@ -196,14 +196,17 @@ def add_public_key(
     account = _get_account(account, server)
     _assert_authorized(author, account)
     if not isinstance(key, ECC.EccKey):
-        key = ECC.import_key(key)
+        try:
+            key = ECC.import_key(key)
+        except:
+            raise ValueCommandException(key)
     server.add_public_key(account, key)
 
 
-def list_accounts(author: Union[AccountId, str], server: Server):
+def list_accounts(author: Union[AccountId, str], server: Server) -> List[Account]:
     """List all accounts"""
-    author = _get_account(author)
-    _assert_authorized(author)
+    author = _get_account(author, server)
+    _assert_authorized(author, None)
     return server.list_accounts()
 
 
@@ -319,21 +322,21 @@ def add_proxy(
     author = _get_account(author, server)
     account = _get_account(account, server)
     proxy = _get_account(proxy, server)
-    _assert_authorized(author)
+    _assert_authorized(author, None)
 
     server.add_proxy(author, proxy, account)
 
 
 def remove_proxy(
         author: Union[AccountId, str],
-        account: Union[AccountId. str],
+        account: Union[AccountId, str],
         proxy: Union[AccountId, str],
         server: Server):
     """Remove proxy 'proxy' from account with authorization from author."""
     author = _get_account(author, server)
     account = _get_account(account, server)
     proxy = _get_account(proxy, server)
-    _assert_authorized(author)
+    _assert_authorized(author, None)
 
     server.remove_proxy(author, proxy, account)
 
@@ -343,7 +346,7 @@ def delete_account(
         account: Union[AccountId, str], server: Server):
     """Delete account with authorization from account on server."""
     author = _get_account(author)
-    _assert_authorized(author)
+    _assert_authorized(author, None)
 
     if not server.delete_account(author, account):
         raise ProcessCommandException()
@@ -355,7 +358,7 @@ def add_tax_bracket(
         rate: Fraction, name: str, server: Server):
     """Add a tax bracket to a server with authorization from author"""
     author = _get_account(author, server)
-    _assert_authorized(author)
+    _assert_authorized(author, None)
     server.add_tax_bracket(author, start, end, rate, name)
 
 
@@ -364,21 +367,21 @@ def remove_tax_bracket(
         name: str, server: Server):
     """Remove tax bracket by name with authorization from author"""
     author = _get_account(author, server)
-    _assert_authorized(author)
+    _assert_authorized(author, None)
     server.remove_tax_bracket(author, name)
 
 
 def force_tax(author: Union[AccountId, str], server: Server):
     """Manually trigger taxation"""
     author = _get_account(author, server)
-    _assert_authorized(author)
+    _assert_authorized(author, None)
     server.force_tax(author)
 
 
 def auto_tax(author: Union[AccountId, str], server: Server) -> bool:
     """Toggle automatic taxation"""
     author = _get_account(author, server)
-    _assert_authorized(author)
+    _assert_authorized(author, None)
     return server.toggle_auto_tax(author)
 
 
@@ -387,6 +390,6 @@ def force_ticks(
         amount: int, server: Server):
     """Forcibly run multiple ticks"""
     author = _get_account(author, server)
-    _assert_authorized(author)
+    _assert_authorized(author, None)
     for i in range(amount):
         server.notify_tick_elapsed(time.time())
