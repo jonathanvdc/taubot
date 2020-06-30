@@ -24,5 +24,9 @@ def split_into_chunks(message: bytes, max_length):
 
 def discord_postprocess(message: str) -> str:
     """Postprocesses a message for the Discord platform. This entails
-       replacing double newlines with single newlines."""
-    return message.replace('\n\n', '\n')
+       replacing double newlines with single newlines this also entails
+       turning discord account names into mentions"""
+    message = message.replace('\n\n', '\n')
+    return '\n'.join(
+        ' '.join(f'<@{word.strip("discord/")}>' if word.startswith('discord/') else word for word in line.split())
+        for line in message.split('\n'))

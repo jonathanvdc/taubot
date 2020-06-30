@@ -22,8 +22,12 @@ The bot will need credentials to log into Reddit. Summarize them in a JSON file 
   "reddit_password": "PASSWORD",
   "discord_token": "BOT TOKEN",
   "server_key": "PEM PRIVATE RSA KEY",
-  "prefix": ["e!"]
+  "prefix": ["Prefix 1", "Prefix 2", "etc"],
+  "colour": "Hex code for embed colour",
+  "ledger-path": "/path/to/ledger"
 }
 ```
+Please note that if any of the arguments are missing the bot will print a warning and gracefully degrade into not using the
+associated feature
 
 To make the bot respond to all unread messages, simply run `python3 src/bot.py`.
