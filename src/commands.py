@@ -130,7 +130,7 @@ def transfer(
     if not server.can_transfer(source, destination, amount):
         raise ValueCommandException(amount)
 
-    proof = server.transfer(source, destination, amount)
+    proof = server.transfer(author, source, destination, amount)
     return proof
 
 
@@ -222,6 +222,7 @@ def print_money(
 
     author = _get_account(author, server)
     account = _get_account(account, server)
+    _assert_authorized(author, None)
 
     server.print_money(author, account, amount)
 

@@ -1,5 +1,5 @@
 import commands
-from accounting import Server, AccountId
+from accounting import Server, AccountId, Authorization
 from accounting import parse_account_id
 from typing import Union, Callable
 from fractions import Fraction
@@ -81,7 +81,6 @@ def _parse_command_args(cmd: _Command, message: str):
     if cmd.name != split[0]:
         raise ValueError("Command message does not match command")
     else:
-        print(cmd.args.values())
         args = map(
             lambda arg, input: arg[0](input),
             cmd.args.values(),
@@ -90,7 +89,7 @@ def _parse_command_args(cmd: _Command, message: str):
         args = list(args)
         if len(args) < len(cmd.args):
             raise ValueError("Not enough arguments")
-        rest = " ".join(split[:1+len(cmd.args)])
+        rest = " ".join(split[1+len(cmd.args):])
         return args, rest
 
 
@@ -101,14 +100,15 @@ def run_command(
     try:
         command = _commands[message.split()[0]]
         args, rest = _parse_command_args(command, message)
+        print(args, rest)
         return command.func(author, *args, rest, server)
     except ValueError as e:
         return '\n'.join((f"Error: {e}",
                           command.usage()))
     except commands.ValueCommandException as e:
-        return (f"Invalid argument: {e}",
-                "",
-                command.usage())
+        return '\n'.join((f"Invalid argument: {e}",
+                          "",
+                          command.usage()))
     except commands.AccountCommandException as e:
         return f"Invalid account: {e}"
     except commands.UnauthorizedCommandException:
@@ -126,13 +126,13 @@ def _transfer(
         destination: Union[AccountId, str], rest: str,
         server: Server) -> str:
     commands.transfer(author, author, destination, amount, server)
-    return "Transferred {amount}{server to {author}"
+    return f"Transferred {amount} to {destination}"
 
 
 _add_command(
     'transfer',
     {
-        'amount': (int, 'Amount to transfer'),
+        'amount': (Fraction, 'Amount to transfer'),
         'destination': (parse_account_id, 'Beneficiary to transfer to'),
     },
     _transfer,
@@ -274,9 +274,9 @@ def _list_accounts(
         author: Union[AccountId, str],
         rest: str, server: Server) -> str:
     return '\n'.join(
-        [''.join(((f" {':'.join(map(str,server.get_account_ids(acc))):<20}",
+        [''.join(((f" {':'.join(map(str,server.get_account_ids(acc))):<28}",
                    f" | {acc.get_authorization().name.lower():<9}",
-                   f" | {acc.get_balance():<8}")))
+                   f" | {_mixed(acc.get_balance()):>8}")))
          for acc in commands.list_accounts(author, server)])
 
 
@@ -287,6 +287,346 @@ _add_command(
     "List all accounts"
 )
 _alias('list', 'ls')
+
+
+def _print_money(
+        author: Union[AccountId, str],
+        amount: int, account: Union[AccountId, str],
+        rest: str, server: Server) -> str:
+    try:
+        commands.print_money(author, account, amount, server)
+    except commands.ValueCommandException:
+        return "Invalid arguement: Cannot print negative amounts"
+    return f"Printed {_mixed(amount)} to {account}"
+
+
+def _remove_funds(
+        author: Union[AccountId, str],
+        amount: int, account: Union[AccountId, str],
+        rest: str, server: Server) -> str:
+    try:
+        commands.remove_funds(author, account, amount, server)
+    except commands.ValueCommandException:
+        return "Invalid arguement: Cannot remove negative amounts"
+    return f"Deleted {_mixed(amount)} from {account}"
+
+
+_add_command(
+    'print-money',
+    {
+        'amount': (Fraction, "Amount to print"),
+        'account': (parse_account_id, "Account to print to")
+    },
+    _print_money,
+    "Print amount of money to account"
+)
+_add_command(
+    'remove-funds',
+    {
+        'amount': (Fraction, "Amount to delete"),
+        'account': (parse_account_id, "Account to print to")
+    },
+    _remove_funds,
+    "Deletes fund from an account"
+)
+
+
+def _create_recurring_transfer(
+        author: Union[AccountId, str],
+        amount: Fraction,
+        destination: Union[AccountId, str],
+        tick_count: int, rest: str, server: Server) -> str:
+    transfer_id = commands.create_recurring_transfer(
+        author, author,
+        destination, amount,
+        tick_count, server).get_id()
+    return ''.join((
+        f"Set up recurring transfer of {_mixed(amount)}",
+        f" to {destination.readable()} every {tick_count} ticks",
+        f" (Transfer {transfer_id})."))
+
+
+def _admin_create_recurring_transfer(
+        author: Union[AccountId, str],
+        amount: Fraction,
+        source: Union[AccountId, str],
+        destination: Union[AccountId, str],
+        tick_count: int, rest: str, server: Server) -> str:
+    transfer_id = commands.create_recurring_transfer(
+        author, source,
+        destination, amount,
+        tick_count, server).get_id()
+    return ''.join((
+        f"Set up recurring transfer of {_mixed(amount)}",
+        f" from {source.readable()}"
+        f" to {destination.readable()} every {tick_count} ticks",
+        f" (Transfer {transfer_id})."))
+
+
+_add_command(
+    'create-recurring-transfer',
+    {
+        'amount': (Fraction, "Amount to transfer"),
+        'destination': (parse_account_id, 'Beneficiary to transfer to'),
+        'tick_count': (int, "Interval to transfer by, in ticks")
+    },
+    _create_recurring_transfer,
+    "Create a transfer which reccurs according to an interval"
+)
+_add_command(
+    'admin-create-recurring-transfer',
+    {
+        'amount': (Fraction, "Amount to transfer"),
+        'source': (Fraction, "Source to transfer from"),
+        'destination': (parse_account_id, 'Beneficiary to transfer to'),
+        'tick_count': (int, "Interval to transfer by, in ticks")
+    },
+    _create_recurring_transfer,
+    "Create a transfer from someon else which reccurs according to an interval"
+)
+
+
+def _proxy(
+        author: Union[AccountId, str],
+        account: Union[AccountId, str],
+        command: str, rest: str, server: Server) -> str:
+    if commands.verify_proxy(author, account, None, command+' '+rest, server):
+        return run_command(account, command+' '+rest, server)
+    return "Unauthorized proxy"
+
+
+def _proxy_dsa(
+        author: Union[AccountId, str],
+        account: Union[AccountId, str],
+        signature: str, command: str,
+        rest: str, server: Server) -> str:
+    if commands.verify_proxy(author, account, signature,
+                             command+' '+rest, server):
+        return run_command(account, command+' '+rest, server)
+    return "Unauthorized proxy"
+
+
+_add_command(
+    'proxy',
+    {
+        'account': (parse_account_id, "Account to proxy"),
+        'command': (str, "Command to run")
+    },
+    _proxy,
+    "Proxy another account"
+)
+_add_command(
+    'proxy-dsa',
+    {
+        'account': (parse_account_id, "Account to proxy"),
+        'signature': (str, "ECDSA signature of command to run"),
+        'command': (str, "Command to run")
+    },
+    _proxy_dsa,
+    "Proxy another account using ECDSA verification"
+)
+
+
+def _request_alias(
+        author: Union[AccountId, str],
+        alias: Union[AccountId, str],
+        rest: str, server: Server) -> str:
+    alias_code = commands.request_alias(author, alias, server)
+    return f"Alias request code: `{alias_code}`"
+
+
+def _add_alias(
+        author: Union[AccountId, str],
+        account: Union[AccountId, str],
+        request_code: str, rest: str, server: Server) -> str:
+    commands.add_alias(author, account, request_code, server)
+    return ''.join((f"{author.readable()} and {account.readable()}",
+                    "now refer to the same account"))
+
+
+_add_command(
+    'request-alias',
+    {
+        'account': (parse_account_id, "Account to alias")
+    },
+    _request_alias,
+    "Request an alias code"
+)
+_add_command(
+    'add-alias',
+    {
+        'account': (parse_account_id, "Account to alias"),
+        'request_code': (str, "Code generated on the other account")
+    },
+    _add_alias,
+    "Add another account as an alias"
+)
+
+
+def _admin_add_proxy(
+        author: Union[AccountId, str],
+        account: Union[AccountId, str],
+        proxy: Union[AccountId, str],
+        rest: str, server: Server) -> str:
+    commands.add_proxy(author, account, proxy, server)
+    return "Account proxied"
+
+
+def _admin_remove_proxy(
+        author: Union[AccountId, str],
+        account: Union[AccountId, str],
+        proxy: Union[AccountId, str],
+        rest: str, server: Server) -> str:
+    commands.remove_proxy(author, account, proxy, server)
+    return "Account unproxied"
+
+
+_add_command(
+    'admin-add-proxy',
+    {
+        'account': (parse_account_id, 'Account to let proxy'),
+        'proxy': (parse_account_id, 'Account to proxy')
+    },
+    _admin_add_proxy,
+    "Let an account proxy another account"
+)
+_add_command(
+    'admin-remove-proxy',
+    {
+        'account': (parse_account_id, 'Account to not let proxy'),
+        'proxy': (parse_account_id, 'Account being proxied')
+    },
+    _admin_remove_proxy,
+    "Unlet an account proxy another account"
+)
+
+
+def _delete_account(
+        author: Union[AccountId, str],
+        account: Union[AccountId, str],
+        rest: str, server: Server) -> str:
+    commands.delete_account(author, account, server)
+    return "Account deleted."
+
+
+_add_command(
+    'admin-delete-account',
+    {
+        'account': (parse_account_id, "Account to delete")
+    },
+    _delete_account,
+    "Delete an account"
+)
+
+
+def _add_tax_bracket(
+        author: Union[AccountId, str],
+        start: Fraction, rate: Fraction, end: Fraction,
+        name: str, rest: str, server: Server) -> str:
+    end = end if end >= 0 else None
+    commands.add_tax_bracket(
+        author, start, end, rate, name, server)
+    return f"Tax bracket {name}: [{start}–{end}] {rate} added"
+
+
+def _remove_tax_bracket(
+        author: Union[AccountId, str],
+        name: str, rest: str, server: Server) -> str:
+    commands.remove_tax_bracket(author, name, server)
+    return "Removed tax bracket"
+
+
+_add_command(
+    'add-tax-bracket',
+    {
+        'start': (Fraction, "Lower bound of the tax bracket"),
+        'end': (Fraction, "Upper bound of the tax bracker (-1 for infinity)"),
+        'rate': (Fraction, "Tax rate"),
+        'name': (Fraction, "Name of the tax bracket")
+    },
+    _add_tax_bracket,
+    "Add a tax bracket"
+)
+_add_command(
+    'remove-tax-bracket',
+    {
+        'name': (Fraction, "Name of the bracket to delete")
+    },
+    _remove_tax_bracket,
+    "Removes a tax bracker"
+)
+
+
+def _force_tax(
+        author: Union[AccountId, str],
+        rest: str, server: Server) -> str:
+    commands.force_tax(author, server)
+    return "Applied tax"
+
+
+_add_command(
+    'force-tax',
+    {},
+    _force_tax,
+    "Manually apply tax brakcets"
+)
+
+
+def _toggle_auto_tax(
+        author: Union[AccountId, str],
+        rest: str, server: Server) -> str:
+    ans = commands.auto_tax(author, server)
+    return f"Automatic taxation { 'on' if ans else 'off'}"
+
+
+_add_command(
+    'auto-tax',
+    {},
+    _toggle_auto_tax,
+    "Toggle automatic taxation"
+)
+
+
+def _force_ticks(
+        author: Union[AccountId, str],
+        ticks: int,
+        rest: str, server: Server) -> str:
+    commands.force_ticks(author, ticks, server)
+    return f"Forced {ticks} ticks"
+
+
+_add_command(
+    'force-ticks',
+    {
+        'ticks': (int, "Amount of ticks to force")
+    },
+    _force_ticks,
+    "Forcibly run ticks"
+)
+
+
+def _authorize(
+        author: Union[AccountId, str],
+        account: Union[AccountId, str],
+        level: Authorization,
+        rest: str, server: Server) -> str:
+    commands.authorize(author, account, level, server)
+    return "Authorized"
+
+
+_add_command(
+    'authorize',
+    {
+        'account': (parse_account_id, "Account to authorize"),
+        'level': (
+            lambda s: {a.name.lower(): a for a in Authorization}[s.lower()],
+            "Authorization level"
+        )
+    },
+    _authorize,
+    "Authorize a command"
+)
+_alias('authorize', 'authorise')
 
 
 def _help(
