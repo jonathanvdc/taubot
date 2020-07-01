@@ -162,8 +162,7 @@ if __name__ == '__main__':
                 run_command(
                     DiscordAccountId(str(message.author.id)),
                     command_content,
-                    server,
-                    prefixes[0] + ' '))
+                    server))
 
             chunks = split_into_chunks(response.encode('utf-8'), 1024)
             try:
