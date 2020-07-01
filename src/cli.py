@@ -39,7 +39,6 @@ if __name__ == "__main__":
                 acc_id = parse_account_id(split[1])
                 acc = acc_id
             elif cmd.startswith('exit'):
-                print("goodbye!")
                 break
             else:
                 print(
