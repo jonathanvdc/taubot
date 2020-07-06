@@ -139,6 +139,27 @@ _add_command(
     "Transfers an amount of money from your account to a beneficiary's")
 
 
+def _adm_transfer(
+        author: Union[AccountId, str],
+        amount: Fraction,
+        source: Union[AccountId, str],
+        destination: Union[AccountId, str], rest: str,
+        server: Server) -> str:
+    commands.transfer(author, source, destination, amount, server)
+    return f"Transferred {amount} from {source} to {destination}"
+
+
+_add_command(
+    'admin-transfer',
+    {
+        'amount': (Fraction, 'Amount to transfer'),
+        'source': (parse_account_id, 'Account from which the amount is sent'),
+        'destination': (parse_account_id, 'Beneficiary to transfer to'),
+    },
+    _adm_transfer,
+    "Transfers an amount of money from a source account to a beneficiary's")
+
+
 def _open_account(
         author: Union[AccountId, str],
         rest: str,
