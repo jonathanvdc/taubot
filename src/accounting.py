@@ -4,6 +4,7 @@ import os.path
 import random
 import base64
 from fractions import Fraction
+from functools import total_ordering
 from collections import defaultdict
 from enum import Enum
 from typing import List, Union, Dict, Any
@@ -127,11 +128,17 @@ def unwrap_proxies(account_id: AccountId) -> AccountId:
         return account_id
 
 
+@total_ordering
 class Authorization(Enum):
     """Defines various levels of authorization for account."""
     CITIZEN = 0
     ADMIN = 1
     DEVELOPER = 2
+
+    def __lt__(self, other):
+        if self.__class__ is other.__class__:
+            return self.value < other.value
+        return NotImplementedError
 
 
 class Account(object):

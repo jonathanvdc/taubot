@@ -9,7 +9,7 @@ import traceback
 import sys
 from aiohttp import web
 from accounting import LedgerServer, Authorization, RedditAccountId, DiscordAccountId, AccountId
-from commands import COMMANDS, list_commands_as_markdown, CommandException, assert_authorized, process_command
+from bot_commands import run_command
 from utils import split_into_chunks, discord_postprocess
 from httpapi import RequestServer
 from Crypto.PublicKey import RSA
@@ -45,7 +45,7 @@ def reply(message, body):
 
 def process_message(message, server):
     """Processes a message sent to the bot."""
-    reply(message, process_command(RedditAccountId(message.author.name), message.body, server))
+    reply(message, run_command(RedditAccountId(message.author.name), message.body, server))
 
 def process_all_messages(reddit, server):
     """Processes all unread messages received by the bot."""
@@ -63,7 +63,7 @@ def is_comment_replied_to(reddit, comment):
 def process_comment(comment, server):
     """Processes a comment with the proper prefix."""
     author = RedditAccountId(comment.author.name)
-    comment.reply(process_command(author, comment.body[len(prefix):], server))
+    comment.reply(run_command(author, comment.body[len(prefix):], server))
 
 async def message_loop(reddit, server):
     """The bot's main Reddit message loop."""
@@ -159,11 +159,10 @@ if __name__ == '__main__':
             prefix = [prefix for prefix in prefixes if content.lower().startswith(prefix)][0]
             command_content = content[len(prefix):].lstrip()
             response = discord_postprocess(
-                process_command(
+                run_command(
                     DiscordAccountId(str(message.author.id)),
                     command_content,
-                    server,
-                    prefixes[0] + ' '))
+                    server))
 
             chunks = split_into_chunks(response.encode('utf-8'), 1024)
             try:
