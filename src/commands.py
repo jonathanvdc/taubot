@@ -117,20 +117,21 @@ def _is_signed_by(
 
 # COMMANDS
 def transfer(
-        author: Union[AccountId, str],  source: Union[AccountId, str],
-        destination: Union[AccountId, str],
+        author_id: Union[AccountId, str],
+        source_id: Union[AccountId, str],
+        destination_id: Union[AccountId, str],
         amount: Fraction, server: Server):
     """Transfer amount ¤ from source to destination with authorization
        from author on server"""
-    author = _get_account(author, server)
-    source = _get_account(source, server)
-    destination = _get_account(destination, server)
+    author = _get_account(author_id, server)
+    source = _get_account(source_id, server)
+    destination = _get_account(destination_id, server)
     _assert_authorized(author, source)
 
     if not server.can_transfer(source, destination, amount):
         raise ValueCommandException(amount)
 
-    proof = server.transfer(author, source, destination, amount)
+    proof = server.transfer(author_id, source, destination, amount)
     return proof
 
 
@@ -147,48 +148,48 @@ def open_account(
 
 
 def authorize(
-        author: Union[AccountId, str],
-        account: Union[AccountId, str],
+        author_id: Union[AccountId, str],
+        account_id: Union[AccountId, str],
         auth_level: Authorization, server: Server):
     """Changes an account's authorization level to `auth_level`."""
-    author = _get_account(author, server)
-    account = _get_account(account, server)
+    author = _get_account(author_id, server)
+    account = _get_account(account_id, server)
     required = max(
         Authorization.ADMIN,
         auth_level,
         account.get_authorization())
     _assert_authorized(author, account, admin_level=required, min_level=required)
-    server.authorize(author, account, auth_level)
+    server.authorize(author_id, account, auth_level)
 
 
 def freeze_account(
-        author: Union[AccountId, str],
-        account: Union[AccountId, str], server: Server):
+        author_id: Union[AccountId, str],
+        account_id: Union[AccountId, str], server: Server):
     """Freeze account with authorization from author"""
-    author = _get_account(author, server)
-    account = _get_account(account, server)
+    author = _get_account(author_id, server)
+    account = _get_account(account_id, server)
     _assert_authorized(author, account, min_level=Authorization.ADMIN)
 
-    server.set_frozen(author, account, True)
+    server.set_frozen(author_id, account, True)
 
 
 def unfreeze_account(
-        author: Union[AccountId, str],
-        account: Union[AccountId, str], server: Server):
+        author_id: Union[AccountId, str],
+        account_id: Union[AccountId, str], server: Server):
     """Unfreeze account with authorization from author"""
-    author = _get_account(author, server)
-    account = _get_account(account, server)
+    author = _get_account(author_id, server)
+    account = _get_account(account_id, server)
     _assert_authorized(author, account, min_level=Authorization.ADMIN)
 
-    server.set_frozen(author, account, False)
+    server.set_frozen(author_id, account, False)
 
 
 def balance(
-        author: Union[AccountId, str],
-        account: Union[AccountId, str], server: Server) -> Fraction:
+        author_id: Union[AccountId, str],
+        account_id: Union[AccountId, str], server: Server) -> Fraction:
     """Get the balance of account with authorization from author"""
-    author = _get_account(author, server)
-    account = _get_account(account, server)
+    author = _get_account(author_id, server)
+    account = _get_account(account_id, server)
     _assert_authorized(author, account)
 
     return account.get_balance()
@@ -198,8 +199,7 @@ def get_money_supply(
         author: Union[AccountId, str],
         server: Server) -> Fraction:
     """Return sum of all account balances"""
-    return sum(map(lambda acc: acc.get_balance(),
-                   server.get_accounts()))
+    return sum(acc.get_balance() for acc in server.get_accounts())
 
 
 def add_public_key(
@@ -226,8 +226,8 @@ def list_accounts(author: Union[AccountId, str], server: Server) -> List[Account
 
 
 def print_money(
-        author: Union[AccountId, str],
-        account: Union[AccountId, str],
+        author_id: Union[AccountId, str],
+        account_id: Union[AccountId, str],
         amount: Fraction, server: Server):
     """Print an amount of money into an account,
        with the authorization of author, on server
@@ -235,16 +235,16 @@ def print_money(
     if amount <= 0:
         raise ValueCommandException(amount)
 
-    author = _get_account(author, server)
-    account = _get_account(account, server)
+    author = _get_account(author_id, server)
+    account = _get_account(account_id, server)
     _assert_authorized(author, None)
 
-    server.print_money(author, account, amount)
+    server.print_money(author_id, account, amount)
 
 
 def remove_funds(
-        author: Union[AccountId, str],
-        account: Union[AccountId, str],
+        author_id: Union[AccountId, str],
+        account_id: Union[AccountId, str],
         amount: Fraction, server: Server):
     """Remove funds from an account. Rules applying to
        print_money apply.
@@ -252,28 +252,29 @@ def remove_funds(
     if amount <= 0:
         raise ValueCommandException(amount)
 
-    author = _get_account(author, server)
-    account = _get_account(account, server)
+    author = _get_account(author_id, server)
+    account = _get_account(account_id, server)
+    _assert_authorized(author, None)
 
-    server.remove_funds(author, account, amount)
+    server.remove_funds(author_id, account, amount)
 
 
 def create_recurring_transfer(
-        author: Union[AccountId, str],
-        sender: Union[AccountId, str],
-        destinarion: Union[AccountId, str],
+        author_id: Union[AccountId, str],
+        sender_id: Union[AccountId, str],
+        destination_id: Union[AccountId, str],
         amount: Fraction, tick_count: int, server: Server):
     """Create a recurring transfer."""
-    author = _get_account(author, server)
-    sender = _get_account(sender, server)
-    destination = _get_account(destinarion, server)
+    author = _get_account(author_id, server)
+    sender = _get_account(sender_id, server)
+    destination = _get_account(destination_id, server)
     _assert_authorized(author, sender)
 
     transfer = server.create_recurring_transfer(
-            author,
+            author_id,
             sender,
             destination,
-            amount*tick_count,
+            amount * tick_count,
             tick_count)
 
     return transfer
