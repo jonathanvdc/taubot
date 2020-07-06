@@ -146,6 +146,21 @@ def open_account(
     server.open_account(account)
 
 
+def authorize(
+        author: Union[AccountId, str],
+        account: Union[AccountId, str],
+        auth_level: Authorization, server: Server):
+    """Changes an account's authorization level to `auth_level`."""
+    author = _get_account(author, server)
+    account = _get_account(account, server)
+    required = max(
+        Authorization.ADMIN,
+        auth_level,
+        account.get_authorization())
+    _assert_authorized(author, account, admin_level=required, min_level=required)
+    server.authorize(author, account, auth_level)
+
+
 def freeze_account(
         author: Union[AccountId, str],
         account: Union[AccountId, str], server: Server):
@@ -292,7 +307,7 @@ def request_alias(
     key = ECC.generate(curve='P-256')
     signer = DSS.new(key, 'fips-186-3')
     signature = base64.b64encode(signer.sign(
-        SHA3_512.new(str(account).encode('utf-8')).decode('utf-8')))
+        SHA3_512.new(str(account).encode('utf-8')).digest().decode('utf-8')))
     server.add_public_key(author, key.public_key())
 
     return signature
@@ -346,7 +361,7 @@ def delete_account(
         author: Union[AccountId, str],
         account: Union[AccountId, str], server: Server):
     """Delete account with authorization from account on server."""
-    author = _get_account(author)
+    author = _get_account(author, server)
     _assert_authorized(author, None)
 
     if not server.delete_account(author, account):
@@ -392,5 +407,5 @@ def force_ticks(
     """Forcibly run multiple ticks"""
     author = _get_account(author, server)
     _assert_authorized(author, None)
-    for i in range(amount):
+    for _ in range(amount):
         server.notify_tick_elapsed(time.time())

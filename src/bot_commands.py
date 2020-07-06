@@ -100,7 +100,7 @@ def run_command(
     try:
         command = _commands[message.split()[0]]
         args, rest = _parse_command_args(command, message)
-        print(args, rest)
+        # print(args, rest)
         return command.func(author, *args, rest, server)
     except ValueError as e:
         return '\n'.join((f"Error: {e}",
