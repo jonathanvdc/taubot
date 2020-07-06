@@ -314,7 +314,7 @@ def request_alias(
     key = ECC.generate(curve='P-256')
     signer = DSS.new(key, 'fips-186-3')
     signature = base64.b64encode(signer.sign(
-        SHA3_512.new(str(account).encode('utf-8')).digest().decode('utf-8')))
+        SHA3_512.new(str(account).encode('utf-8')))).decode('utf-8')
     server.add_public_key(author, key.public_key())
 
     return signature
