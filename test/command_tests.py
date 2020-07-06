@@ -6,7 +6,7 @@ sys.path.append(path.join(path.dirname(
     path.dirname(path.abspath(__file__))), 'src'))
 
 from fractions import Fraction
-from commands import process_command
+from bot_commands import run_command
 from accounting import RedditAccountId, InMemoryServer, Server, Authorization, LedgerServer
 from typing import Sequence
 from base64 import b64encode
@@ -21,7 +21,7 @@ def run_command_stream(server, *commands):
     """Runs a sequence of commands (formatted as author, command pairs) on a server."""
     responses = []
     for (author, cmd) in commands:
-        responses.append(process_command(author, cmd, server))
+        responses.append(run_command(author, cmd, server))
     return responses
 
 def create_test_servers() -> Sequence[Server]:
