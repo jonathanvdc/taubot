@@ -120,6 +120,20 @@ def run_command(
 
 
 # Commands
+def _name(
+    author: Union[AccountId, str],
+    rest: str,
+    server: Server):
+    return f"Your ID for the purpose of accounting is {commands.name(author, server)}"
+
+
+_add_command(
+    'name',
+    {},
+    _name,
+    "Produces your real or hypothetical account ID")
+
+
 def _transfer(
         author: Union[AccountId, str],
         amount: Fraction,

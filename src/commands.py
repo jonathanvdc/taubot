@@ -116,6 +116,12 @@ def _is_signed_by(
 
 
 # COMMANDS
+def name(
+        author_id: Union[AccountId, str],
+        server: Server):
+    """Gets the real or hypothetical account ID for the author."""
+    return str(author_id)
+
 def transfer(
         author_id: Union[AccountId, str],
         source_id: Union[AccountId, str],
