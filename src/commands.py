@@ -331,31 +331,31 @@ def add_alias(
 
 
 def add_proxy(
-        author: Union[AccountId, str],
-        account: Union[AccountId, str],
-        proxy: Union[AccountId, str],
+        author_id: Union[AccountId, str],
+        account_id: Union[AccountId, str],
+        proxy_id: Union[AccountId, str],
         server: Server):
     """Add proxy to account with authorization from author on server"""
-    author = _get_account(author, server)
-    account = _get_account(account, server)
-    proxy = _get_account(proxy, server)
+    author = _get_account(author_id, server)
+    account = _get_account(account_id, server)
+    proxy = _get_account(proxy_id, server)
     _assert_authorized(author, None)
 
-    server.add_proxy(author, proxy, account)
+    server.add_proxy(author_id, proxy, account)
 
 
 def remove_proxy(
-        author: Union[AccountId, str],
-        account: Union[AccountId, str],
-        proxy: Union[AccountId, str],
+        author_id: Union[AccountId, str],
+        account_id: Union[AccountId, str],
+        proxy_id: Union[AccountId, str],
         server: Server):
     """Remove proxy 'proxy' from account with authorization from author."""
-    author = _get_account(author, server)
-    account = _get_account(account, server)
-    proxy = _get_account(proxy, server)
+    author = _get_account(author_id, server)
+    account = _get_account(account_id, server)
+    proxy = _get_account(proxy_id, server)
     _assert_authorized(author, None)
 
-    server.remove_proxy(author, proxy, account)
+    server.remove_proxy(author_id, proxy, account)
 
 
 def delete_account(

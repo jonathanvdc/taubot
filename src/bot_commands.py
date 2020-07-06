@@ -486,8 +486,8 @@ _add_command(
 
 def _admin_add_proxy(
         author: Union[AccountId, str],
-        account: Union[AccountId, str],
         proxy: Union[AccountId, str],
+        account: Union[AccountId, str],
         rest: str, server: Server) -> str:
     commands.add_proxy(author, account, proxy, server)
     return "Account proxied"
@@ -495,8 +495,8 @@ def _admin_add_proxy(
 
 def _admin_remove_proxy(
         author: Union[AccountId, str],
-        account: Union[AccountId, str],
         proxy: Union[AccountId, str],
+        account: Union[AccountId, str],
         rest: str, server: Server) -> str:
     commands.remove_proxy(author, account, proxy, server)
     return "Account unproxied"
@@ -505,8 +505,8 @@ def _admin_remove_proxy(
 _add_command(
     'admin-add-proxy',
     {
-        'account': (parse_account_id, 'Account to let proxy'),
-        'proxy': (parse_account_id, 'Account to proxy')
+        'proxy': (parse_account_id, 'Account that will be able to act as a proxy for `account`'),
+        'account': (parse_account_id, 'Account that `proxy` will be able to access')
     },
     _admin_add_proxy,
     "Let an account proxy another account"
@@ -514,8 +514,8 @@ _add_command(
 _add_command(
     'admin-remove-proxy',
     {
-        'account': (parse_account_id, 'Account to not let proxy'),
-        'proxy': (parse_account_id, 'Account being proxied')
+        'proxy': (parse_account_id, 'Account that can currently act as a proxy for `account`'),
+        'account': (parse_account_id, 'Account that `proxy` will no longer be able to access')
     },
     _admin_remove_proxy,
     "Unlet an account proxy another account"
