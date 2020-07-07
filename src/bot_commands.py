@@ -417,7 +417,7 @@ _add_command(
         'tick_count': (int, "Interval to transfer by, in ticks")
     },
     _create_recurring_transfer,
-    "Create a transfer from someon else which reccurs according to an interval"
+    "Create a transfer from someone else which reccurs according to an interval"
 )
 
 
@@ -668,11 +668,24 @@ def _help(
         author: Union[AccountId, str],
         rest: str,
         server: Server) -> str:
-    return '\n'.join(
-        ("List of commands:",
-         "\n".join(f"    {command.name} -- {command.description}"
-                   for command in _commands.values())
-         ))
+
+    rest_split = rest.strip().split()
+    if rest_split:
+        # If we have at least one additional argument then we will print usage
+        # for that particular command.
+        command_name = rest_split[0]
+        if command_name in _commands:
+            command = _commands[command_name]
+            return command.usage()
+        else:
+            return f"No such command: {command_name}"
+    else:
+        # Otherwise, we'll print general help.
+        return '\n'.join(
+            ("List of commands:",
+            "\n".join(f"    {command.name} -- {command.description}"
+                    for command in _commands.values())
+            ))
 
 
 _add_command(
