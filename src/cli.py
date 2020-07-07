@@ -3,7 +3,7 @@ import click
 from accounting import LedgerServer
 from accounting import parse_account_id
 from bot_commands import run_command
-from utils import split_into_chunks
+
 
 _ver = "1.0.2"
 _name = "taubot CLI"
