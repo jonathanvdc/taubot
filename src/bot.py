@@ -153,7 +153,7 @@ class DiscordMessage(object):
         new_embed.set_thumbnail(url=user.avatar_url)
         new_embed.set_footer(
             text=f"This was sent in response to {user.name}'s message; you can safely disregard it if that's not you.\n"
-                 f"Position {position + 1}/{len(content)}")
+                 f"Page {position + 1}/{len(content)}")
         return new_embed
 
     async def reload(self):
