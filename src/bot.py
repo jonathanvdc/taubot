@@ -16,6 +16,8 @@ from Crypto.PublicKey import RSA
 
 # move this to config?
 prefix = "e!"
+messages = {}
+
 
 def read_config():
     """Reads the configuration file."""
@@ -26,6 +28,7 @@ def read_config():
     with open(sys.argv[1] if len(sys.argv) == 2 else 'bot-config.json') as f:
         return json.load(f)
 
+
 def create_reddit(config):
     """Creates a Reddit handle."""
     return praw.Reddit(
@@ -35,23 +38,28 @@ def create_reddit(config):
         username=config['reddit_username'],
         password=config['reddit_password'])
 
+
 def reply(message, body):
     """Replies to a private message."""
     title = message.subject
     if not title.lower().startswith('re:'):
         title = 're: %s' % message.subject
     message.mark_read()
-    return message.author.message(title, '%s\n\n%s\n\n%s' % ('\n'.join('> %s' % line for line in message.body.split('\n')), body, 'Provided by r/SimDemocracy'))
+    return message.author.message(title, '%s\n\n%s\n\n%s' % (
+        '\n'.join('> %s' % line for line in message.body.split('\n')), body, 'Provided by r/SimDemocracy'))
+
 
 def process_message(message, server):
     """Processes a message sent to the bot."""
     reply(message, run_command(RedditAccountId(message.author.name), message.body, server))
+
 
 def process_all_messages(reddit, server):
     """Processes all unread messages received by the bot."""
     # Process private messages.
     for message in reddit.inbox.unread(limit=None):
         process_message(message, server)
+
 
 def is_comment_replied_to(reddit, comment):
     comment.refresh()
@@ -60,10 +68,12 @@ def is_comment_replied_to(reddit, comment):
             return True
     return False
 
+
 def process_comment(comment, server):
     """Processes a comment with the proper prefix."""
     author = RedditAccountId(comment.author.name)
     comment.reply(run_command(author, comment.body[len(prefix):], server))
+
 
 async def message_loop(reddit, server):
     """The bot's main Reddit message loop."""
@@ -76,6 +86,7 @@ async def message_loop(reddit, server):
 
         # Sleep for five seconds.
         await asyncio.sleep(5)
+
 
 async def tick_loop(server):
     """The bot's tick loop, which looks at the clock every now and then and notifies the
@@ -91,6 +102,7 @@ async def tick_loop(server):
         # Sleep for a while.
         await asyncio.sleep(5)
 
+
 async def comment_loop(reddit, server):
     """The bot's main Reddit comment loop."""
     # TODO: handle multiple subreddits.
@@ -104,14 +116,69 @@ async def comment_loop(reddit, server):
         # Sleep for five seconds.
         await asyncio.sleep(5)
 
+
 def print_bad(item):
     # TODO: make less sloppy
-    print(f'\n[WARN] the necessary keys to create the {item} were not found or were invalid degrading to running without {item} functionality')
-    print(f'[WARN] if you wish to run with {item} functionality fill the bot-config.json with the necessary keys found here: ')
+    print(
+        f'\n[WARN] the necessary keys to create the {item} were not found or were invalid degrading to running without {item} functionality')
+    print(
+        f'[WARN] if you wish to run with {item} functionality fill the bot-config.json with the necessary keys found here: ')
     print(f'[WARN] https://github.com/jonathanvdc/taubot/blob/master/README.md, or in the README attached')
+
+
+class DiscordMessage(object):
+
+    def __init__(self, respondee: discord.User, chunks, title="", start_pos=0, message: discord.Message = None):
+        global max_chunks
+        self.title = title
+        self.respondee = respondee
+        self.position = start_pos
+        self.content = [chunks[i:i + max_chunks] for i in range(0, len(chunks), max_chunks)]
+        self.message = message
+
+    def _generate_embed(self) -> discord.Embed:
+        user = self.respondee
+        content = self.content
+        position = self.position
+        title = self.title
+
+        try:
+            new_embed = discord.Embed(color=int(config["colour"], base=16))
+        except Exception:
+            new_embed = discord.Embed()
+
+        for i, chunk in enumerate(content[position]):
+            title = "(cont'd)" if i != 0 else title
+            new_embed.add_field(name=title, value=chunk.decode('utf-8'), inline=False)
+        new_embed.set_thumbnail(url=user.avatar_url)
+        new_embed.set_footer(
+            text=f"This was sent in response to {user.name}'s message; you can safely disregard it if that's not you.\n"
+                 f"Position {position + 1}/{len(content)}")
+        return new_embed
+
+    async def reload(self):
+        await self.message.edit(embed=self._generate_embed())
+
+    async def send(self, channel):
+        self.message = await channel.send(embed=self._generate_embed())
+        if len(self.content) > 1:
+            await self.message.add_reaction('⬅')
+            await self.message.add_reaction('➡')
+
+    def set_pos(self, new):
+        if 0 <= new <= (len(self.content) - 1):
+            self.position = new
+
+    def increment_pos(self):
+        self.position += 1
+
+    def decrement_pos(self):
+        self.position -= 1
+
 
 if __name__ == '__main__':
     print("[Main] Launching")
+
     required_reddit_keys = [
         'reddit_client_id',
         'reddit_client_secret',
@@ -125,11 +192,17 @@ if __name__ == '__main__':
     # however if the content is invalid the program will still crash
     # TODO: stop program from crashing if reddit data is invalid
     if set(required_reddit_keys).issubset(set(config.keys())):
-            reddit = create_reddit(config)
+        reddit = create_reddit(config)
     else:
         print_bad("Reddit Bot")
         reddit = None
     discord_client = discord.Client()
+
+    try:
+        max_chunks = int(config["max_chunks"])
+    except Exception as e:
+        print_bad("max chunks")
+        max_chunks = 1
 
     try:
         config_prefix = config["prefix"]
@@ -137,8 +210,39 @@ if __name__ == '__main__':
         print_bad("prefix")
         config_prefix = None
 
+
     @discord_client.event
-    async def on_message(message):
+    async def on_reaction_add(reaction, user):
+        assert isinstance(reaction.emoji, str)
+        if user == discord_client.user:
+            return
+
+        if reaction.message.id in messages:
+
+            message = reaction.message
+            message_obj = messages[message.id]
+            assert isinstance(message_obj, DiscordMessage)
+            if user != message_obj.respondee:
+                return
+
+            if reaction.emoji == '⬅' and message_obj.position > 0:
+                message_obj.decrement_pos()
+
+            elif reaction.emoji == '➡' and message_obj.position < len(message_obj.content) - 1:
+                message_obj.increment_pos()
+
+            else:
+                return
+
+            await message_obj.reload()
+            try:
+                await reaction.remove(user)
+            except discord.errors.HTTPException:
+                pass
+
+
+    @discord_client.event
+    async def on_message(message: discord.Message):
         if message.author == discord_client.user:
             return
         global config_prefix
@@ -152,10 +256,10 @@ if __name__ == '__main__':
         if config_prefix is not None:
             if isinstance(config_prefix, (list, tuple)):
                 prefixes += tuple(config_prefix)
-            else:
+            elif isinstance(config_prefix, str):
                 prefixes += (config_prefix.lower(),)
 
-        if content.lower().startswith(prefixes): # Checking all messages that start with the prefix.
+        if content.lower().startswith(prefixes):  # Checking all messages that start with the prefix.
             prefix = [prefix for prefix in prefixes if content.lower().startswith(prefix)][0]
             command_content = content[len(prefix):].lstrip()
             response = discord_postprocess(
@@ -165,26 +269,19 @@ if __name__ == '__main__':
                     server))
 
             chunks = split_into_chunks(response.encode('utf-8'), 1024)
-            try:
-                embed = discord.Embed(color=int(config["colour"], base=16))
-            except Exception as e:
-                print_bad("Embed Colour")
-                embed = discord.Embed()
-                pass
+
             title = command_content.split()[0] if len(command_content.split()) > 0 else 'Empty Message'
-            for i, chunk in enumerate(chunks):
-                title = "(cont'd)" if i > 0 else title
-                embed.add_field(name=title, value=chunk.decode('utf-8'), inline=False)
 
-            embed.set_thumbnail(url=message.author.avatar_url)
-            embed.set_footer(text="This was sent in response to %s's message; you can safely disregard it if that's not you." % message.author.name)
+            message_obj = DiscordMessage(message.author, chunks, title)
 
-            await message.channel.send(embed=embed)
+            await message_obj.send(message.channel)
+            messages[message_obj.message.id] = message_obj
+
 
     ledger_path = config['ledger-path'] if 'ledger-path' in config else 'ledger.txt'
     with LedgerServer(ledger_path) as server:
         loop = asyncio.get_event_loop()
-        from prawcore.exceptions import *
+
         # Run the Reddit bot.
         asyncio.get_event_loop().create_task(tick_loop(server))
         if reddit is not None:
