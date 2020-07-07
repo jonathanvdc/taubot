@@ -33,7 +33,7 @@ class _Command(object):
     def usage(self):
         """Print usage for command"""
         return '\n'.join((f"Usage: {self.name} {' '.join(self.args.keys())}",
-                          self.description+"",
+                          self.description + "",
                           "Options: ",
                           '\n'.join([f"    {arg} -- {meta[1]}"
                                      for arg, meta in self.args.items()])
@@ -46,14 +46,18 @@ class _Command(object):
 # UI utilities
 def _mixed(f: Fraction) -> str:
     if f.numerator % f.denominator == 0:
-        return str(int(f.numerator/f.denominator))
+        return str(int(f.numerator / f.denominator))
     elif f.numerator / f.denominator <= 1:
         return str(f)
     else:
         return '%d %d/%d' % (
-            int(f.numerator/f.denominator),
+            int(f.numerator / f.denominator),
             f.numerator % f.denominator,
             f.denominator)
+
+
+def _rounded(f: Fraction) -> str:
+    return str(round(float(f), 2))
 
 
 # Command utilities
@@ -89,7 +93,7 @@ def _parse_command_args(cmd: _Command, message: str):
         args = list(args)
         if len(args) < len(cmd.args):
             raise ValueError("Not enough arguments")
-        rest = " ".join(split[1+len(cmd.args):])
+        rest = " ".join(split[1 + len(cmd.args):])
         return args, rest
 
 
@@ -257,7 +261,7 @@ def _balance(
         author: Union[AccountId, str],
         rest: str, server: Server) -> str:
     bal = commands.balance(author, author, server)
-    return f"Your balance is {_mixed(bal)}"
+    return f"Your balance is {_rounded(bal)}"
 
 
 _add_command(
@@ -267,6 +271,21 @@ _add_command(
     "Print account balance"
 )
 _alias('balance', 'bal')
+
+
+def _full_balance(author: Union[AccountId, str], rest: str, server: Server) -> str:
+    bal = commands.balance(author, author, server)
+    return f"Your un-rounded balance is {_mixed(bal)}"
+
+
+_add_command(
+    'full-balance',
+    {},
+    _full_balance,
+    "Print un-rounded balance"
+)
+
+_alias("full-balance", "full-bal")
 
 
 def _money_supply(
@@ -309,9 +328,9 @@ def _list_accounts(
         author: Union[AccountId, str],
         rest: str, server: Server) -> str:
     return '\n'.join(
-        [''.join(((f" {':'.join(map(str,server.get_account_ids(acc))):<28}",
+        [''.join(((f" {':'.join(map(str, server.get_account_ids(acc))):<28}",
                    f" | {acc.get_authorization().name.lower():<9}",
-                   f" | {_mixed(acc.get_balance()):>8}")))
+                   f" | {_rounded(acc.get_balance()):>8}")))
          for acc in commands.list_accounts(author, server)])
 
 
@@ -326,7 +345,7 @@ _alias('list', 'ls')
 
 def _print_money(
         author: Union[AccountId, str],
-        amount: int, account: Union[AccountId, str],
+        amount: Fraction, account: Union[AccountId, str],
         rest: str, server: Server) -> str:
     try:
         commands.print_money(author, account, amount, server)
@@ -337,12 +356,12 @@ def _print_money(
 
 def _remove_funds(
         author: Union[AccountId, str],
-        amount: int, account: Union[AccountId, str],
+        amount: Fraction, account: Union[AccountId, str],
         rest: str, server: Server) -> str:
     try:
         commands.remove_funds(author, account, amount, server)
     except commands.ValueCommandException:
-        return "Invalid arguement: Cannot remove negative amounts"
+        return "Invalid argument: Cannot remove negative amounts"
     return f"Deleted {_mixed(amount)} from {account}"
 
 
@@ -425,8 +444,8 @@ def _proxy(
         author: Union[AccountId, str],
         account: Union[AccountId, str],
         command: str, rest: str, server: Server) -> str:
-    if commands.verify_proxy(author, account, None, command+' '+rest, server):
-        return run_command(account, command+' '+rest, server)
+    if commands.verify_proxy(author, account, None, command + ' ' + rest, server):
+        return run_command(account, command + ' ' + rest, server)
     return "Unauthorized proxy"
 
 
@@ -436,8 +455,8 @@ def _proxy_dsa(
         signature: str, command: str,
         rest: str, server: Server) -> str:
     if commands.verify_proxy(author, account, signature,
-                             command+' '+rest, server):
-        return run_command(account, command+' '+rest, server)
+                             command + ' ' + rest, server):
+        return run_command(account, command + ' ' + rest, server)
     return "Unauthorized proxy"
 
 
@@ -611,7 +630,7 @@ def _toggle_auto_tax(
         author: Union[AccountId, str],
         rest: str, server: Server) -> str:
     ans = commands.auto_tax(author, server)
-    return f"Automatic taxation { 'on' if ans else 'off'}"
+    return f"Automatic taxation {'on' if ans else 'off'}"
 
 
 _add_command(
@@ -668,7 +687,6 @@ def _help(
         author: Union[AccountId, str],
         rest: str,
         server: Server) -> str:
-
     rest_split = rest.strip().split()
     if rest_split:
         # If we have at least one additional argument then we will print usage
