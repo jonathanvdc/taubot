@@ -124,7 +124,7 @@ class CommandTests(unittest.TestCase):
             server.print_money(admin_id, admin, Fraction('123.1'))
 
             self.assertIn(
-                '123 1/10',
+                '123.1',
                 ''.join(
                     run_command_stream(
                         server,
