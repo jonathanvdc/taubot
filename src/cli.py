@@ -54,7 +54,7 @@ def parse(cmd, account, fp):
         cmds = cmd.split(';')
         for cmd in cmds:
 
-            print('\n'.join([chunk.decode("utf-8") for chunk in split_into_chunks(run_command(acc, cmd, server).encode('utf-8'), 1024)]))
+            print(run_command(acc, cmd, server))
         server.close()
     elif cmd is None:
         cli(fp, account)
