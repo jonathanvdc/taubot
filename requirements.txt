@@ -1,3 +1,5 @@
 praw
 pycryptodome
 discord.py
+# optional only needed for cli
+click
