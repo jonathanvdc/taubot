@@ -298,7 +298,7 @@ def _add_public_key(
 _add_command(
     'add-public-key',
     {
-        'key': (lambda x: str(x), "Key to use")
+        'key': (str, "Key to use")
     },
     _add_public_key,
     "Adds a public key to your account"
