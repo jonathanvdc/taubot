@@ -44,9 +44,6 @@ class _Command(object):
 
 
 # UI utilities
-def _raise(exception: Exception):
-    """raises an Exception that can be used in lambas"""
-    raise exception
 
 
 def _mixed(f: Fraction) -> str:
