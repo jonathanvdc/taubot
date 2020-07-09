@@ -172,6 +172,8 @@ class Account(object):
         raise NotImplementedError()
 
 
+
+
 class RecurringTransfer(object):
     """A recurring transfer."""
 
@@ -252,6 +254,10 @@ class Server(object):
         """Lists all accounts on this server."""
         raise NotImplementedError()
 
+    def mark_public(self, author: AccountId, account: Account, new_public: bool):
+        """Sets account.public to new_public"""
+        account.public = new_public
+
     def authorize(self, author: AccountId, account: Account, auth_level: Authorization):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
         raise NotImplementedError()
@@ -330,6 +336,7 @@ class InMemoryServer(Server):
         self.gov_account.auth = Authorization.DEVELOPER
         self.recurring_transfers = {}
 
+
     def open_account(self, id: AccountId, account_uuid=None):
         """Opens an empty account with a particular ID. Raises an exception if the account
            already exists. Otherwise returns the newly opened account."""
@@ -386,6 +393,10 @@ class InMemoryServer(Server):
         """Lists all accounts on this server."""
         unique_accounts = set(self.accounts.values())
         return sorted(unique_accounts, key=lambda account: str(self.get_account_id(account)))
+
+    def mark_public(self, author: AccountId, account: Account, new_public: bool):
+        """Sets account.public to new_public"""
+        account.public = new_public
 
     def authorize(self, author: AccountId, account: Account, auth_level: Authorization):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
@@ -489,6 +500,7 @@ class InMemoryAccount(Account):
             uuid.uuid4())
         self.balance = 0
         self.frozen = False
+        self.public = False
         self.auth = Authorization.CITIZEN
         self.public_keys = []
         self.proxies = set()
@@ -906,6 +918,9 @@ class LedgerServer(InMemoryServer):
                 self.get_tax_object().toggle_auto_tax()
             elif cmd == 'force-tax':
                 pass
+            elif cmd == 'mark-public':
+                super().mark_public(parse_account_id(elems[1]), self.get_account_from_string(elems[2]), True if elems[3] == "True" else False)
+
             else:
                 raise Exception("Unknown ledger command '%s'." % cmd)
 
@@ -934,6 +949,15 @@ class LedgerServer(InMemoryServer):
             'add-alias',
             self.get_account_id(account),
             alias_id)
+
+    def mark_public(self, author: AccountId, account: Account, new_public: bool):
+        super().mark_public(author, account, new_public)
+        self._ledger_write(
+            'mark-public',
+            author,
+            self.get_account_id(account),
+            str(new_public)
+        )
 
     def authorize(self, author: AccountId, account, auth_level):
         """Makes `author` set `account`'s authorization level to `auth_level`."""

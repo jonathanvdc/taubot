@@ -122,6 +122,18 @@ def name(
     """Gets the real or hypothetical account ID for the author."""
     return str(author_id)
 
+
+def toggle_public(
+        author_id: Union[AccountId, str],
+        account_id: Union[AccountId, str],
+        server: Server):
+    """Marks account as public"""
+    account = server.get_account(account_id)
+    value = not account.public
+    server.mark_public(author_id, account, value)
+    return value
+
+
 def transfer(
         author_id: Union[AccountId, str],
         source_id: Union[AccountId, str],
@@ -231,6 +243,11 @@ def list_accounts(author: Union[AccountId, str], server: Server) -> List[Account
     return server.list_accounts()
 
 
+def list_public_accounts(author: Union[AccountId, str], server: Server) -> List[Account]:
+    """returns a list of all accounts marked as public"""
+    return [account for account in server.list_accounts() if account.public]
+
+
 def print_money(
         author_id: Union[AccountId, str],
         account_id: Union[AccountId, str],
@@ -277,11 +294,11 @@ def create_recurring_transfer(
     _assert_authorized(author, sender)
 
     transfer = server.create_recurring_transfer(
-            author_id,
-            sender,
-            destination,
-            amount * tick_count,
-            tick_count)
+        author_id,
+        sender,
+        destination,
+        amount * tick_count,
+        tick_count)
 
     return transfer
 
