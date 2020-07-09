@@ -44,6 +44,8 @@ class _Command(object):
 
 
 # UI utilities
+
+
 def _mixed(f: Fraction) -> str:
     if f.numerator % f.denominator == 0:
         return str(int(f.numerator / f.denominator))
@@ -125,9 +127,9 @@ def run_command(
 
 # Commands
 def _name(
-    author: Union[AccountId, str],
-    rest: str,
-    server: Server):
+        author: Union[AccountId, str],
+        rest: str,
+        server: Server):
     return f"Your ID for the purpose of accounting is {commands.name(author, server)}"
 
 
@@ -198,17 +200,52 @@ _add_command(
 )
 
 
+def _set_public(author: Union[AccountId, str], rest: str, server: Server) -> str:
+    value = commands.toggle_public(author, author, server)
+    return f"Account marked as {'public' if value else 'private'}"
+
+
+_add_command(
+    'toggle-public',
+    {},
+    _set_public,
+    "toggle whether or not your account is public"
+)
+
+
+def _leader_board(author: Union[AccountId, str], limit: Union[int, None], rest: str, server: Server):
+    accounts = sorted(commands.list_public_accounts(author, server), key=lambda x: x.get_balance(), reverse=True)
+    return '\n'.join(
+        [''.join(((f"{i+1:<3} | {':'.join(map(str, server.get_account_ids(acc))):<28}",
+                   f" | {acc.get_authorization().name.lower():<9}",
+                   f" | {_rounded(acc.get_balance()):>8}")))
+         for i, acc in enumerate(accounts) if limit is None or i < limit])
+
+
+_add_command(
+    'leader-board',
+    {
+        'limit': (lambda x: None if int(x) < 0 else int(x), "the maximum number of accounts to display -1 for no limit")
+    },
+    _leader_board,
+    "view a list of all public accounts sorted by balance"
+)
+
+
+_alias('leader-board', 'lb')
+
+
 def _adm_open_account(
         author: Union[AccountId, str],
         account: Union[AccountId, str],
         rest: str,
-        server: Server) -> str:
+        server: Server) -> Union[str, tuple]:
     try:
         commands.open_account(author, account, server)
     except commands.ValueCommandException:
         return ("Looks like they already have an account",
                 "No need to open a new one")
-    return "Account opened succefully"
+    return "Account opened successfully"
 
 
 _add_command(
@@ -701,9 +738,9 @@ def _help(
         # Otherwise, we'll print general help.
         return '\n'.join(
             ("List of commands:",
-            "\n".join(f"    {command.name} -- {command.description}"
-                    for command in _commands.values())
-            ))
+             "\n".join(f"    {command.name} -- {command.description}"
+                       for command in _commands.values())
+             ))
 
 
 _add_command(
