@@ -254,10 +254,6 @@ class Server(object):
         """Lists all accounts on this server."""
         raise NotImplementedError()
 
-    def mark_public(self, author: AccountId, account: Account, new_public: bool):
-        """Sets account.public to new_public"""
-        account.public = new_public
-
     def authorize(self, author: AccountId, account: Account, auth_level: Authorization):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
         raise NotImplementedError()
