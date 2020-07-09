@@ -915,7 +915,7 @@ class LedgerServer(InMemoryServer):
             elif cmd == 'force-tax':
                 pass
             elif cmd == 'mark-public':
-                super().mark_public(parse_account_id(elems[1]), self.get_account_from_string(elems[2]), True if elems[3] == "True" else False)
+                super().mark_public(parse_account_id(elems[1]), self.get_account_from_string(elems[2]), elems[3] == "True")
 
             else:
                 raise Exception("Unknown ledger command '%s'." % cmd)
