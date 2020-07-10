@@ -996,7 +996,7 @@ class LedgerServer(InMemoryServer):
         result = super().delete_account(account)
         self._ledger_write(
             'delete-account',
-            author,
+            self.get_account_id(author),
             account
         )
         return result
