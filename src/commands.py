@@ -385,8 +385,8 @@ def delete_account(
         author: Union[AccountId, str],
         account: Union[AccountId, str], server: Server):
     """Delete account with authorization from account on server."""
-    author = _get_account(author, server)
-    _assert_authorized(author, None)
+    author_acc = _get_account(author, server)
+    _assert_authorized(author_acc, None)
 
     if not server.delete_account(author, account):
         raise ProcessCommandException()
