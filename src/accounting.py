@@ -992,7 +992,7 @@ class LedgerServer(InMemoryServer):
             self.get_account_id(proxied_account))
         return result
 
-    def delete_account(self, author: Account, account: AccountId):
+    def delete_account(self, author: AccountId, account: AccountId):
         result = super().delete_account(account)
         self._ledger_write(
             'delete-account',
