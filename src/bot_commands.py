@@ -243,8 +243,7 @@ def _adm_open_account(
     try:
         commands.open_account(author, account, server)
     except commands.ValueCommandException:
-        return ("Looks like they already have an account",
-                "No need to open a new one")
+        return "Looks like they already have an account\nNo need to open a new one"
     return "Account opened successfully"
 
 
