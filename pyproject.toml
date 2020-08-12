@@ -1,0 +1,12 @@
+[tool]
+[tool.poetry]
+authors = [""]
+description = ""
+name = "root"
+version = "0.0.0"
+[tool.poetry.dependencies]
+"discord.py" = "*"
+praw = "*"
+pycryptodome = "*"
+python = "^3.8"
+click = "^7.1.2"

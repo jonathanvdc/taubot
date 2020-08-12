@@ -14,6 +14,12 @@ from utils import split_into_chunks, discord_postprocess
 from httpapi import RequestServer
 from Crypto.PublicKey import RSA
 
+config = None
+reddit = None
+discord_client = None
+max_chunks = 1
+config_prefix = None
+
 # move this to config?
 prefix = "e!"
 messages = {}
@@ -125,60 +131,7 @@ def print_bad(item):
         f'[WARN] if you wish to run with {item} functionality fill the bot-config.json with the necessary keys found here: ')
     print(f'[WARN] https://github.com/jonathanvdc/taubot/blob/master/README.md, or in the README attached')
 
-
-class DiscordMessage(object):
-
-    def __init__(self, respondee: discord.User, chunks, title="", start_pos=0, message: discord.Message = None):
-        global max_chunks
-        self.title = title
-        self.respondee = respondee
-        self.position = start_pos
-        self.content = [chunks[i:i + max_chunks] for i in range(0, len(chunks), max_chunks)]
-        self.message = message
-
-    def _generate_embed(self) -> discord.Embed:
-        user = self.respondee
-        content = self.content
-        position = self.position
-        title = self.title
-
-        try:
-            new_embed = discord.Embed(color=int(config["colour"], base=16))
-        except Exception:
-            new_embed = discord.Embed()
-
-        for i, chunk in enumerate(content[position]):
-            title = "(cont'd)" if i != 0 else title
-            new_embed.add_field(name=title, value=chunk.decode('utf-8'), inline=False)
-        new_embed.set_thumbnail(url=user.avatar_url)
-        new_embed.set_footer(
-            text=f"This was sent in response to {user.name}'s message; you can safely disregard it if that's not you.\n"
-                 f"Page {position + 1}/{len(content)}")
-        return new_embed
-
-    async def reload(self):
-        await self.message.edit(embed=self._generate_embed())
-
-    async def send(self, channel):
-        self.message = await channel.send(embed=self._generate_embed())
-        if len(self.content) > 1:
-            await self.message.add_reaction('⬅')
-            await self.message.add_reaction('➡')
-
-    def set_pos(self, new):
-        if 0 <= new <= (len(self.content) - 1):
-            self.position = new
-
-    def increment_pos(self):
-        self.position += 1
-
-    def decrement_pos(self):
-        self.position -= 1
-
-
-if __name__ == '__main__':
-    print("[Main] Launching")
-
+def run():
     required_reddit_keys = [
         'reddit_client_id',
         'reddit_client_secret',
@@ -245,7 +198,6 @@ if __name__ == '__main__':
     async def on_message(message: discord.Message):
         if message.author == discord_client.user:
             return
-        global config_prefix
 
         content = message.content.lstrip()
 
@@ -305,3 +257,58 @@ if __name__ == '__main__':
         else:
             print_bad("Discord Bot")
             asyncio.get_event_loop().run_forever()
+
+
+class DiscordMessage(object):
+
+    def __init__(self, respondee: discord.User, chunks, title="", start_pos=0, message: discord.Message = None):
+        global max_chunks
+        self.title = title
+        self.respondee = respondee
+        self.position = start_pos
+        self.content = [chunks[i:i + max_chunks] for i in range(0, len(chunks), max_chunks)]
+        self.message = message
+
+    def _generate_embed(self) -> discord.Embed:
+        user = self.respondee
+        content = self.content
+        position = self.position
+        title = self.title
+
+        try:
+            new_embed = discord.Embed(color=int(config["colour"], base=16))
+        except Exception:
+            new_embed = discord.Embed()
+
+        for i, chunk in enumerate(content[position]):
+            title = "(cont'd)" if i != 0 else title
+            new_embed.add_field(name=title, value=chunk.decode('utf-8'), inline=False)
+        new_embed.set_thumbnail(url=user.avatar_url)
+        new_embed.set_footer(
+            text=f"This was sent in response to {user.name}'s message; you can safely disregard it if that's not you.\n"
+                 f"Page {position + 1}/{len(content)}")
+        return new_embed
+
+    async def reload(self):
+        await self.message.edit(embed=self._generate_embed())
+
+    async def send(self, channel):
+        self.message = await channel.send(embed=self._generate_embed())
+        if len(self.content) > 1:
+            await self.message.add_reaction('⬅')
+            await self.message.add_reaction('➡')
+
+    def set_pos(self, new):
+        if 0 <= new <= (len(self.content) - 1):
+            self.position = new
+
+    def increment_pos(self):
+        self.position += 1
+
+    def decrement_pos(self):
+        self.position -= 1
+
+
+if __name__ == '__main__':
+    print("[Main] Launching")
+    run()
