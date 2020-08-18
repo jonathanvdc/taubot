@@ -1,3 +1,4 @@
+import asyncio
 from bot import run
 
 def loop():
@@ -6,7 +7,7 @@ def loop():
         try:
             run()
         except:
-            pass
+            asyncio.set_event_loop(asyncio.new_event_loop())
 
 print("[Main] Launching")
 
