@@ -7,6 +7,7 @@ import time
 import asyncio
 import traceback
 import sys
+import os
 from aiohttp import web
 from accounting import LedgerServer, Authorization, RedditAccountId, DiscordAccountId, AccountId
 from bot_commands import run_command
@@ -34,6 +35,12 @@ def read_config():
     with open(sys.argv[1] if len(sys.argv) == 2 else 'bot-config.json') as f:
         return json.load(f)
 
+def add_env_vars(config):
+    """Adds private options from environmental variables to the config."""
+    config['reddit_client_secret'] = os.getenv('REDDIT_CLIENT_SECRET')
+    config['reddit_password'] = os.getenv('REDDIT_PASSWORD')
+    config['discord_token'] = os.getenv('DISCORD_TOKEN')
+    config['server_key'] = os.getenv('SERVER_KEY')
 
 def create_reddit(config):
     """Creates a Reddit handle."""
@@ -140,6 +147,10 @@ def run():
     ]
 
     config = read_config()
+    
+    if config['load_private_options_from_env']:
+        add_env_vars(config)
+    
     # checks if all the necessary keys exist to create a Reddit object
     # this allows for graceful degradation if the necessary keys are not present
     # however if the content is invalid the program will still crash

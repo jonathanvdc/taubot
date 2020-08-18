@@ -16,6 +16,7 @@ The bot will need credentials to log into Reddit. Summarize them in a JSON file 
 
 ```json
 {
+  "load_private_options_from_env": false,
   "reddit_client_id": "CLIENT_ID",
   "reddit_client_secret": "CLIENT_SECRET",
   "reddit_username": "USERNAME",
@@ -27,7 +28,9 @@ The bot will need credentials to log into Reddit. Summarize them in a JSON file 
   "ledger-path": "/path/to/ledger"
 }
 ```
+The password portions of the credentials can instead be set as environmental variables and loaded by setting `load_private_options_from_env` to be `true`.
+
 Please note that if any of the arguments are missing the bot will print a warning and gracefully degrade into not using the
-associated feature
+associated feature.
 
 To make the bot respond to all unread messages, simply run `python3 src/bot.py`.
