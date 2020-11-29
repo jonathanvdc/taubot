@@ -206,8 +206,11 @@ class RequestServer(object):
 
     def handle_request_body(self, request_body: bytes) -> bytes:
         """Handles an HTTP request body."""
-        # Decrypt the request.
-        account, reply_key, message = self.decrypt_request(request_body)
+        # Attempt to decrypt the request.
+        try:
+            account, reply_key, message = self.decrypt_request(request_body)
+        except:
+            return None
 
         # Decompose the request message into a command and data.
         request_command_bytes, request_data = take_length_prefixed(message)

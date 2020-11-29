@@ -1,4 +1,5 @@
 # Keep the bot configuration private.
+.env
 bot-config.json
 *-bot-config.json
 ledger.txt
