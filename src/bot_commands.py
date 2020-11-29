@@ -297,7 +297,7 @@ def _balance(
         author: Union[AccountId, str],
         rest: str, server: Server) -> str:
     bal = commands.balance(author, author, server) if len(rest.strip()) == 0 else commands.balance(author, rest, server)
-    return f"{rest if len(rest.strip()) > 0 else author}'s balance is {_rounded(bal)}"
+    return f"{rest if len(rest.strip()) > 0 else author} 's balance is {_rounded(bal)}"
 
 
 _add_command(
