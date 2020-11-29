@@ -73,7 +73,7 @@ def _assert_authorized(
         admin_level: Authorization = Authorization.ADMIN,
         min_level: Authorization = Authorization.CITIZEN):
     """Raise exception unless subject is authorized to perform
-       operations to object
+       operations as object
 
        Keyword arguments:
        admin_level -- Authorization level to consider "administrative"
@@ -208,7 +208,7 @@ def balance(
     """Get the balance of account with authorization from author"""
     author = _get_account(author_id, server)
     account = _get_account(account_id, server)
-    _assert_authorized(author, account)
+    _assert_authorized(author, account, admin_level=Authorization.OFFICER)
 
     return account.get_balance()
 

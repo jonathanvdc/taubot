@@ -132,8 +132,9 @@ def unwrap_proxies(account_id: AccountId) -> AccountId:
 class Authorization(Enum):
     """Defines various levels of authorization for account."""
     CITIZEN = 0
-    ADMIN = 1
-    DEVELOPER = 2
+    OFFICER = 1
+    ADMIN = 2
+    DEVELOPER = 3
 
     def __lt__(self, other):
         if self.__class__ is other.__class__:
