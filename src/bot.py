@@ -143,7 +143,7 @@ class DiscordMessage(object):
         title = self.title
 
         try:
-            new_embed = discord.Embed(color=int(config["colour"], base=16))
+            new_embed = discord.Embed(color=int(config["colour"], base=16) if config["colour"] != "main colour" else self.respondee.colour)
         except Exception:
             new_embed = discord.Embed()
 
@@ -152,8 +152,8 @@ class DiscordMessage(object):
             new_embed.add_field(name=title, value=chunk.decode('utf-8'), inline=False)
         new_embed.set_thumbnail(url=user.avatar_url)
         new_embed.set_footer(
-            text=f"This was sent in response to {user.name}'s message; you can safely disregard it if that's not you.\n"
-                 f"Page {position + 1}/{len(content)}")
+            text=f"This was sent in response to {user.name}'s message; you can safely disregard it if that's not you." +
+                 f"\nPage {position + 1}/{len(content)}" if len(content) != 1 else "")
         return new_embed
 
     async def reload(self):

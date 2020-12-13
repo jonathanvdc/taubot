@@ -3,6 +3,7 @@ import time
 import os.path
 import random
 import base64
+import psycopg2
 from fractions import Fraction
 from functools import total_ordering
 from collections import defaultdict
@@ -501,6 +502,9 @@ class InMemoryAccount(Account):
         self.auth = Authorization.CITIZEN
         self.public_keys = []
         self.proxies = set()
+
+    def set_balance(self, bal):
+        self.balance = bal
 
     def get_uuid(self):
         """Gets this account's unique identifier."""
@@ -1125,3 +1129,42 @@ class LedgerServer(InMemoryServer):
             'perform-recurring-transfer',
             transfer.get_id(),
             amount)
+
+
+class SQLServer(InMemoryServer):
+    def __init__(self, psswd: str, uname: str="taubot",  db: str="taubot", host: str="localhost"):
+        super().__init__()
+        self.connection = psycopg2.connect(f"dbname='{db}' host='{host}' user='{uname}' password='{psswd}'")
+        cursor = self.connection.cursor()
+        cursor.execute(open("./src/sql/startup.sql").read())
+        cursor.execute("SELECT uuid, name FROM accounts;")
+        self.connection.commit()
+        account_ids = cursor.fetchall()
+        for account_id in account_ids:
+
+
+    def open_account(self, id: AccountId, account_uuid=None):
+
+
+
+
+class PersistantAccount(InMemoryAccount):
+    def __init__(self, uuid: str, connection):
+        super().__init__(uuid)
+        self.connection = connection
+
+    def set_balance(self, bal):
+        super().set_balance(bal)
+        cursor = self.connection.cursor()
+        cursor.execute("UPDATE accounts SET balance = '%s' WHERE uuid = '%s';", [bal, self.uuid])
+
+
+
+
+
+
+
+
+
+
+
