@@ -1,4 +1,5 @@
 import commands
+import random
 from accounting import Server, AccountId, Authorization
 from accounting import parse_account_id
 from typing import Union, Callable
@@ -18,7 +19,7 @@ class _Command(object):
             description: str = ""):
         """Members:
 
-        name -- string representint the command
+        name -- string representing the command
         args -- a dictionary of arguments in the format of name:(type,desc)
         func -- the function the command object represents
         description -- an end-user readable description of the command
@@ -46,7 +47,8 @@ class _Command(object):
 # UI utilities
 
 
-def _mixed(f: Fraction) -> str:
+def _mixed(f: float) -> str:
+    f = Fraction(f)
     if f.numerator % f.denominator == 0:
         return str(int(f.numerator / f.denominator))
     elif f.numerator / f.denominator <= 1:
@@ -60,6 +62,14 @@ def _mixed(f: Fraction) -> str:
 
 def _rounded(f: Fraction) -> str:
     return str(round(float(f), 2))
+
+
+# Value parsing
+def get_value(string: str) -> float:
+    f = float(Fraction(string))
+    if not (f * 100).is_integer():
+        raise ValueError("Too many decimal places of precision")
+    return f
 
 
 # Command utilities
@@ -133,6 +143,21 @@ def _name(
     return f"Your ID for the purpose of accounting is {commands.name(author, server)}"
 
 
+def _rob(author: str, *args, **kwargs):
+    """IMADEAREDDITACCOUNT5 told me too"""
+    return f"<@&600079868226699274>, {author} is trying to steal money the filthy {random.choice(['capitalist', 'communist'])}"
+
+
+_add_command(
+    'rob',
+    {
+        "amount": (get_value, "amount to steal"),
+        "victim": (parse_account_id, "person to steal from")
+    },
+    _rob,
+    "Robs an account"
+)
+
 _add_command(
     'name',
     {},
@@ -142,7 +167,7 @@ _add_command(
 
 def _transfer(
         author: Union[AccountId, str],
-        amount: Fraction,
+        amount: get_value,
         destination: Union[AccountId, str], rest: str,
         server: Server) -> str:
     commands.transfer(author, author, destination, amount, server)
@@ -152,7 +177,7 @@ def _transfer(
 _add_command(
     'transfer',
     {
-        'amount': (Fraction, 'Amount to transfer'),
+        'amount': (get_value, 'Amount to transfer'),
         'destination': (parse_account_id, 'Beneficiary to transfer to'),
     },
     _transfer,
@@ -161,7 +186,7 @@ _add_command(
 
 def _adm_transfer(
         author: Union[AccountId, str],
-        amount: Fraction,
+        amount: float,
         source: Union[AccountId, str],
         destination: Union[AccountId, str], rest: str,
         server: Server) -> str:
@@ -172,7 +197,7 @@ def _adm_transfer(
 _add_command(
     'admin-transfer',
     {
-        'amount': (Fraction, 'Amount to transfer'),
+        'amount': (get_value, 'Amount to transfer'),
         'source': (parse_account_id, 'Account from which the amount is sent'),
         'destination': (parse_account_id, 'Beneficiary to transfer to'),
     },
@@ -186,7 +211,7 @@ def _open_account(
         server: Server) -> str:
     try:
         commands.open_account(author, author, server)
-    except commands.ValueCommandException:
+    except commands.ValueCommandException as e:
         return ("Looks like you already have an account. "
                 "No need to open another one")
     return "Account opened succesfully"
@@ -216,7 +241,7 @@ _add_command(
 def _leader_board(author: Union[AccountId, str], limit: Union[int, None], rest: str, server: Server):
     accounts = sorted(commands.list_public_accounts(author, server), key=lambda x: x.get_balance(), reverse=True)
     return '\n'.join(
-        [''.join(((f"{i+1:<3} | {':'.join(map(str, server.get_account_ids(acc))):<28}",
+        [''.join(((f"{i + 1:<3} | {':'.join(map(str, server.get_account_ids(acc))):<28}",
                    f" | {acc.get_authorization().name.lower():<9}",
                    f" | {_rounded(acc.get_balance()):>8}")))
          for i, acc in enumerate(accounts) if limit is None or i < limit])
@@ -231,7 +256,6 @@ _add_command(
     "view a list of all public accounts sorted by balance"
 )
 
-
 _alias('leader-board', 'lb')
 
 
@@ -242,7 +266,7 @@ def _adm_open_account(
         server: Server) -> Union[str, tuple]:
     try:
         commands.open_account(author, account, server)
-    except commands.ValueCommandException:
+    except commands.ValueCommandException as e:
         return "Looks like they already have an account\nNo need to open a new one"
     return "Account opened successfully"
 
@@ -381,7 +405,7 @@ _alias('list', 'ls')
 
 def _print_money(
         author: Union[AccountId, str],
-        amount: Fraction, account: Union[AccountId, str],
+        amount: float, account: Union[AccountId, str],
         rest: str, server: Server) -> str:
     try:
         commands.print_money(author, account, amount, server)
@@ -392,7 +416,7 @@ def _print_money(
 
 def _remove_funds(
         author: Union[AccountId, str],
-        amount: Fraction, account: Union[AccountId, str],
+        amount: float, account: Union[AccountId, str],
         rest: str, server: Server) -> str:
     try:
         commands.remove_funds(author, account, amount, server)
@@ -404,7 +428,7 @@ def _remove_funds(
 _add_command(
     'print-money',
     {
-        'amount': (Fraction, "Amount to print"),
+        'amount': (get_value, "Amount to print"),
         'account': (parse_account_id, "Account to print to")
     },
     _print_money,
@@ -413,7 +437,7 @@ _add_command(
 _add_command(
     'remove-funds',
     {
-        'amount': (Fraction, "Amount to delete"),
+        'amount': (get_value, "Amount to delete"),
         'account': (parse_account_id, "Account to print to")
     },
     _remove_funds,
@@ -423,7 +447,7 @@ _add_command(
 
 def _create_recurring_transfer(
         author: Union[AccountId, str],
-        amount: Fraction,
+        amount: float,
         destination: Union[AccountId, str],
         tick_count: int, rest: str, server: Server) -> str:
     transfer_id = commands.create_recurring_transfer(
@@ -438,7 +462,7 @@ def _create_recurring_transfer(
 
 def _admin_create_recurring_transfer(
         author: Union[AccountId, str],
-        amount: Fraction,
+        amount: float,
         source: Union[AccountId, str],
         destination: Union[AccountId, str],
         tick_count: int, rest: str, server: Server) -> str:
@@ -456,7 +480,7 @@ def _admin_create_recurring_transfer(
 _add_command(
     'create-recurring-transfer',
     {
-        'amount': (Fraction, "Amount to transfer"),
+        'amount': (get_value, "Amount to transfer"),
         'destination': (parse_account_id, 'Beneficiary to transfer to'),
         'tick_count': (int, "Interval to transfer by, in ticks")
     },
@@ -466,8 +490,8 @@ _add_command(
 _add_command(
     'admin-create-recurring-transfer',
     {
-        'amount': (Fraction, "Amount to transfer"),
-        'source': (Fraction, "Source to transfer from"),
+        'amount': (get_value, "Amount to transfer"),
+        'source': (get_value, "Source to transfer from"),
         'destination': (parse_account_id, 'Beneficiary to transfer to'),
         'tick_count': (int, "Interval to transfer by, in ticks")
     },
@@ -611,7 +635,7 @@ _add_command(
 
 def _add_tax_bracket(
         author: Union[AccountId, str],
-        start: Fraction, rate: Fraction, end: Fraction,
+        start: float, rate: float, end: float,
         name: str, rest: str, server: Server) -> str:
     end = end if end >= 0 else None
     commands.add_tax_bracket(
@@ -629,10 +653,10 @@ def _remove_tax_bracket(
 _add_command(
     'add-tax-bracket',
     {
-        'start': (Fraction, "Lower bound of the tax bracket"),
-        'end': (Fraction, "Upper bound of the tax bracker (-1 for infinity)"),
-        'rate': (Fraction, "Tax rate"),
-        'name': (Fraction, "Name of the tax bracket")
+        'start': (get_value, "Lower bound of the tax bracket"),
+        'end': (get_value, "Upper bound of the tax bracker (-1 for infinity)"),
+        'rate': (get_value, "Tax rate"),
+        'name': (str, "Name of the tax bracket")
     },
     _add_tax_bracket,
     "Add a tax bracket"
@@ -640,7 +664,7 @@ _add_command(
 _add_command(
     'remove-tax-bracket',
     {
-        'name': (Fraction, "Name of the bracket to delete")
+        'name': (str, "Name of the bracket to delete")
     },
     _remove_tax_bracket,
     "Removes a tax bracker"

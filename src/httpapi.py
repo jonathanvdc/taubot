@@ -31,7 +31,7 @@ from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.Random import get_random_bytes
 from Crypto.PublicKey import RSA
 from aiohttp import web
-from accounting import parse_account_id, Account, AccountId, Server
+from accounting import parse_account_id, base_account, AccountId, Server
 
 
 def generate_server_key():
@@ -284,7 +284,7 @@ class RequestServer(object):
         return (account, reply_key, message)
 
 
-def _handle_balance_request(data: bytes, account: Account, server: Server):
+def _handle_balance_request(data: bytes, account: base_account, server: Server):
     """Handles an account balance request."""
     balance = account.get_balance()
     return (StatusCode.SUCCESS, struct.pack('<ll', balance.numerator, balance.denominator))

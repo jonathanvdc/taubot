@@ -3,7 +3,15 @@ import time
 import os.path
 import random
 import base64
-import psycopg2
+
+# sqlalchemy stuff
+import sqlalchemy
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import String, Integer, Boolean, Column, ForeignKey, Float
+from sqlalchemy.orm import sessionmaker, relationship, backref
+from sqlalchemy.types import CHAR
+
+
 from fractions import Fraction
 from functools import total_ordering
 from collections import defaultdict
@@ -11,6 +19,9 @@ from enum import Enum
 from typing import List, Union, Dict, Any
 from Crypto.Hash import SHA3_256
 from Crypto.PublicKey import ECC
+
+Base = declarative_base()
+Session = sessionmaker()
 
 
 class AccountId(object):
@@ -143,7 +154,7 @@ class Authorization(Enum):
         return NotImplementedError
 
 
-class Account(object):
+class base_account(object):
     """An account. Every account has globally unique ID. Additionally, servers have one server-local ID
        per account on the server."""
 
@@ -174,8 +185,6 @@ class Account(object):
         raise NotImplementedError()
 
 
-
-
 class RecurringTransfer(object):
     """A recurring transfer."""
 
@@ -183,15 +192,15 @@ class RecurringTransfer(object):
         """Gets the ID for the transfer."""
         raise NotImplementedError()
 
-    def get_author(self) -> Account:
+    def get_author(self) -> base_account:
         """Gets the account that authorized the transfer."""
         raise NotImplementedError()
 
-    def get_source(self) -> Account:
+    def get_source(self) -> base_account:
         """Gets the account from which the money originates."""
         raise NotImplementedError()
 
-    def get_destination(self) -> Account:
+    def get_destination(self) -> base_account:
         """Gets the account to which the money must go."""
         raise NotImplementedError()
 
@@ -215,32 +224,32 @@ class RecurringTransfer(object):
 class Server(object):
     """A server manages a number of accounts that all have the same currency."""
 
-    def open_account(self, id: AccountId, account_uuid=None) -> Account:
+    def open_account(self, id: AccountId, account_uuid=None) -> base_account:
         """Opens an empty account with a particular ID. Raises an exception if the account
            already exists. Otherwise returns the newly opened account."""
         raise NotImplementedError()
 
-    def add_account_alias(self, account: Account, alias_id: AccountId):
+    def add_account_alias(self, account: base_account, alias_id: AccountId):
         """Associates an additional ID with an account."""
         raise NotImplementedError()
 
-    def get_account(self, id: AccountId) -> Account:
+    def get_account(self, id: AccountId) -> base_account:
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         raise NotImplementedError()
 
-    def get_accounts(self) -> List[Account]:
+    def get_accounts(self) -> List[base_account]:
         """Gets a list of all accounts on this server."""
         raise NotImplementedError()
 
-    def get_account_from_string(self, id: str) -> Account:
+    def get_account_from_string(self, id: str) -> base_account:
         """Gets the account that matches a string ID. Raises an exception if there is no such account."""
         return self.get_account(parse_account_id(id))
 
-    def get_account_ids(self, account: Account) -> List[AccountId]:
+    def get_account_ids(self, account: base_account) -> List[AccountId]:
         """Gets an account's local IDs. Raises an exception if the account is not registered here."""
         raise NotImplementedError()
 
-    def get_account_id(self, account: Account) -> AccountId:
+    def get_account_id(self, account: base_account) -> AccountId:
         """Gets a representative local account ID. Raises an exception if the account is not registered here."""
         return self.get_account_ids(account)[0]
 
@@ -248,35 +257,35 @@ class Server(object):
         """Tests if an account with a particular ID exists on this server."""
         raise NotImplementedError()
 
-    def get_government_account(self) -> Account:
+    def get_government_account(self) -> base_account:
         """Gets the main government account for this server."""
         raise NotImplementedError()
 
-    def list_accounts(self) -> List[Account]:
+    def list_accounts(self) -> List[base_account]:
         """Lists all accounts on this server."""
         raise NotImplementedError()
 
-    def authorize(self, author: AccountId, account: Account, auth_level: Authorization):
+    def authorize(self, author: AccountId, account: base_account, auth_level: Authorization):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
         raise NotImplementedError()
 
-    def set_frozen(self, author: AccountId, account: Account, is_frozen: bool):
+    def set_frozen(self, author: AccountId, account: base_account, is_frozen: bool):
         """Freezes or unfreezes `account` on the authority of `author`."""
         raise NotImplementedError()
 
-    def print_money(self, author: AccountId, account: Account, amount: Fraction):
+    def print_money(self, author: AccountId, account: base_account, amount: Fraction):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
         raise NotImplementedError()
 
-    def add_public_key(self, account: Account, key):
+    def add_public_key(self, account: base_account, key):
         """Associates a public key with an account. The key must be an ECC key."""
         raise NotImplementedError()
 
-    def add_proxy(self, author: AccountId, account: Account, proxied_account: Account):
+    def add_proxy(self, author: AccountId, account: base_account, proxied_account: base_account):
         """Makes `account` a proxy for `proxied_account`."""
         raise NotImplementedError()
 
-    def remove_proxy(self, author: AccountId, account: Account, proxied_account: Account) -> bool:
+    def remove_proxy(self, author: AccountId, account: base_account, proxied_account: base_account) -> bool:
         """Ensures that `account` is not a proxy for `proxied_account`. Returns
            `False` is `account` was not a proxy for `procied_account`;
            otherwise, `True`."""
@@ -293,8 +302,8 @@ class Server(object):
     def create_recurring_transfer(
             self,
             author: AccountId,
-            source: Account,
-            destination: Account,
+            source: base_account,
+            destination: base_account,
             total_amount: Fraction,
             tick_count: int) -> RecurringTransfer:
         """Creates and registers a new recurring transfer, i.e., a transfer that is spread out over
@@ -307,13 +316,13 @@ class Server(object):
         """Notifies the server that a tick has elapsed."""
         raise NotImplementedError()
 
-    def transfer(self, author: AccountId, source: Account, destination: Account, amount: Fraction):
+    def transfer(self, author: AccountId, source: base_account, destination: base_account, amount: Fraction):
         """Transfers a particular amount of money from one account on this server to another on
            the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
            This action must not complete successfully if the transfer cannot be performed."""
         raise NotImplementedError()
 
-    def can_transfer(self, source: Account, destination: Account, amount: Fraction) -> bool:
+    def can_transfer(self, source: base_account, destination: base_account, amount: Fraction) -> bool:
         """Tells if a particular amount of money can be transferred from one account on this
            server to another. `destination` and `amount` are both `Account` objects."""
         return amount > 0 and \
@@ -334,7 +343,6 @@ class InMemoryServer(Server):
         self.gov_account.auth = Authorization.DEVELOPER
         self.recurring_transfers = {}
 
-
     def open_account(self, id: AccountId, account_uuid=None):
         """Opens an empty account with a particular ID. Raises an exception if the account
            already exists. Otherwise returns the newly opened account."""
@@ -351,7 +359,8 @@ class InMemoryServer(Server):
             account = self.accounts[id]
             to_be_deleted = []
             for rec_transfer in self.recurring_transfers:
-                if self.recurring_transfers[rec_transfer].get_destination() == account or self.recurring_transfers[rec_transfer].get_source() == account:
+                if self.recurring_transfers[rec_transfer].get_destination() == account or self.recurring_transfers[
+                    rec_transfer].get_source() == account:
                     to_be_deleted.append(rec_transfer)
 
             for key in to_be_deleted:
@@ -362,20 +371,20 @@ class InMemoryServer(Server):
 
             return True
 
-    def add_account_alias(self, account: Account, alias_id: AccountId):
+    def add_account_alias(self, account: base_account, alias_id: AccountId):
         """Associates an additional ID with an account."""
         self.accounts[alias_id] = account
         self.inv_accounts[account].append(alias_id)
 
-    def get_account(self, id: AccountId) -> Account:
+    def get_account(self, id: AccountId) -> base_account:
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
         return self.accounts[unwrap_proxies(id)]
 
-    def get_accounts(self) -> List[Account]:
+    def get_accounts(self) -> List[base_account]:
         """Gets a list of all accounts on this server."""
         return list(set(self.accounts.values()))
 
-    def get_account_ids(self, account: Account) -> List[AccountId]:
+    def get_account_ids(self, account: base_account) -> List[AccountId]:
         """Gets an account's local IDs. Raises an exception if the account is not registered here."""
         return self.inv_accounts[account]
 
@@ -389,30 +398,30 @@ class InMemoryServer(Server):
 
     def list_accounts(self):
         """Lists all accounts on this server."""
-        unique_accounts = set(self.accounts.values())
+        unique_accounts = set(self.get_accounts())
         return sorted(unique_accounts, key=lambda account: str(self.get_account_id(account)))
 
-    def mark_public(self, author: AccountId, account: Account, new_public: bool):
+    def mark_public(self, author: AccountId, account: base_account, new_public: bool):
         """Sets account.public to new_public"""
         account.public = new_public
 
-    def authorize(self, author: AccountId, account: Account, auth_level: Authorization):
+    def authorize(self, author: AccountId, account: base_account, auth_level: Authorization):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
         account.auth = auth_level
 
-    def set_frozen(self, author: AccountId, account: Account, is_frozen: bool):
+    def set_frozen(self, author: AccountId, account: base_account, is_frozen: bool):
         """Freezes or unfreezes `account` on the authority of `author`."""
         account.frozen = is_frozen
 
-    def add_public_key(self, account: Account, key):
+    def add_public_key(self, account: base_account, key):
         """Associates a public key with an account. The key must be an ECC key."""
         account.public_keys.append(key)
 
-    def add_proxy(self, author: AccountId, account: Account, proxied_account: Account):
+    def add_proxy(self, author: AccountId, account: base_account, proxied_account: base_account):
         """Makes `account` a proxy for `proxied_account`."""
         proxied_account.proxies.add(account)
 
-    def remove_proxy(self, author: AccountId, account: Account, proxied_account: Account) -> bool:
+    def remove_proxy(self, author: AccountId, account: base_account, proxied_account: base_account) -> bool:
         """Ensures that `account` is not a proxy for `proxied_account`. Returns
            `False` is `account` was not a proxy for `procied_account`;
            otherwise, `True`."""
@@ -422,14 +431,14 @@ class InMemoryServer(Server):
 
         return not prev_in
 
-    def print_money(self, author: AccountId, account: Account, amount: Fraction):
+    def print_money(self, author: AccountId, account: base_account, amount: Fraction):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
         account.balance += amount
 
-    def remove_funds(self, author: Account, account: Account, amount: Fraction):
+    def remove_funds(self, author: base_account, account: base_account, amount: Fraction):
         account.balance -= amount
 
-    def transfer(self, author: AccountId, source: Account, destination: Account, amount: Fraction):
+    def transfer(self, author: AccountId, source: base_account, destination: base_account, amount: Fraction):
         """Transfers a particular amount of money from one account on this server to another on
            the authority of `author`. `author`, `destination` and `amount` are `Account` objects.
            This action must not complete successfully if the transfer cannot be performed."""
@@ -489,7 +498,7 @@ class InMemoryServer(Server):
         transfer.remaining_amount -= amount
 
 
-class InMemoryAccount(Account):
+class InMemoryAccount(base_account):
     """An in-memory account data structure."""
 
     def __init__(self, account_uuid=None):
@@ -527,7 +536,7 @@ class InMemoryAccount(Account):
            Every element of the list is an ECC key."""
         return self.public_keys
 
-    def get_proxies(self) -> List[Account]:
+    def get_proxies(self) -> List[base_account]:
         """Gets all accounts that have been authorized as proxies for this account."""
         return list(self.proxies)
 
@@ -535,7 +544,8 @@ class InMemoryAccount(Account):
 class InMemoryRecurringTransfer(RecurringTransfer):
     """An in-memory description of a recurring transfer."""
 
-    def __init__(self, author: AccountId, source: Account, destination: Account, total_amount, tick_count, remaining_amount, transfer_id=None):
+    def __init__(self, author: AccountId, source: base_account, destination: base_account, total_amount, tick_count,
+                 remaining_amount, transfer_id=None):
         """Initializes an in-memory recurring transfer."""
         self.uuid = transfer_id if transfer_id is not None else str(
             uuid.uuid4())
@@ -554,11 +564,11 @@ class InMemoryRecurringTransfer(RecurringTransfer):
         """Gets the account ID that authorized the transfer."""
         return self.author
 
-    def get_source(self) -> Account:
+    def get_source(self) -> base_account:
         """Gets the account from which the money originates."""
         return self.source
 
-    def get_destination(self) -> Account:
+    def get_destination(self) -> base_account:
         """Gets the account to which the money must go."""
         return self.destination
 
@@ -770,7 +780,7 @@ class TaxMan:
         for key in brackets:
             for account in self.server.list_accounts():
                 if self.server.get_account_id(account).startswith(
-                    tuple(self.tax_brackets[key].exempt_prefixes)): continue
+                        tuple(self.tax_brackets[key].exempt_prefixes)): continue
                 value += self.tax_brackets[key].get_tax(account)
 
         return value
@@ -783,7 +793,7 @@ class TaxMan:
                 i += 1
 
                 if self.server.get_account_id(account).startswith(
-                    tuple(self.tax_brackets[tax_bracket].exempt_prefixes)): continue
+                        tuple(self.tax_brackets[tax_bracket].exempt_prefixes)): continue
                 tax_amount = self.tax_brackets[tax_bracket].get_tax(account)
                 if tax_amount != 0:
                     self.server.transfer('@government', account, self.server.get_government_account(), tax_amount)
@@ -920,7 +930,8 @@ class LedgerServer(InMemoryServer):
             elif cmd == 'force-tax':
                 pass
             elif cmd == 'mark-public':
-                super().mark_public(parse_account_id(elems[1]), self.get_account_from_string(elems[2]), elems[3] == "True")
+                super().mark_public(parse_account_id(elems[1]), self.get_account_from_string(elems[2]),
+                                    elems[3] == "True")
 
             else:
                 raise Exception("Unknown ledger command '%s'." % cmd)
@@ -943,7 +954,7 @@ class LedgerServer(InMemoryServer):
         self._ledger_write('open', id, account.get_uuid())
         return account
 
-    def add_account_alias(self, account: Account, alias_id: AccountId):
+    def add_account_alias(self, account: base_account, alias_id: AccountId):
         """Associates an additional ID with an account."""
         super().add_account_alias(account, alias_id)
         self._ledger_write(
@@ -951,7 +962,7 @@ class LedgerServer(InMemoryServer):
             self.get_account_id(account),
             alias_id)
 
-    def mark_public(self, author: AccountId, account: Account, new_public: bool):
+    def mark_public(self, author: AccountId, account: base_account, new_public: bool):
         super().mark_public(author, account, new_public)
         self._ledger_write(
             'mark-public',
@@ -970,7 +981,7 @@ class LedgerServer(InMemoryServer):
             auth_level.name)
         return result
 
-    def set_frozen(self, author: AccountId, account: Account, is_frozen: bool):
+    def set_frozen(self, author: AccountId, account: base_account, is_frozen: bool):
         """Freezes or unfreezes `account` on the authority of `author`."""
         super().set_frozen(author, account, is_frozen)
         self._ledger_write(
@@ -987,7 +998,7 @@ class LedgerServer(InMemoryServer):
             self.get_account_id(account),
             base64.b64encode(key.export_key(format='PEM').encode('utf-8')).decode('utf-8'))
 
-    def add_proxy(self, author: AccountId, account: Account, proxied_account: Account):
+    def add_proxy(self, author: AccountId, account: base_account, proxied_account: base_account):
         """Makes `account` a proxy for `proxied_account`."""
         result = super().add_proxy(author, account, proxied_account)
         self._ledger_write(
@@ -1055,7 +1066,7 @@ class LedgerServer(InMemoryServer):
             'add-exempt-prefix'
         )
 
-    def remove_proxy(self, author: AccountId, account: Account, proxied_account: Account) -> bool:
+    def remove_proxy(self, author: AccountId, account: base_account, proxied_account: base_account) -> bool:
         """Ensures that `account` is not a proxy for `proxied_account`. Returns
            `False` is `account` was not a proxy for `procied_account`;
            otherwise, `True`."""
@@ -1131,40 +1142,133 @@ class LedgerServer(InMemoryServer):
             amount)
 
 
+class Account(Base):
+    __tablename__ = 'accounts'
+
+    uuid = Column(CHAR(36), primary_key=True)
+    auth = Column(Integer, server_default='0', nullable=False)  # for some reason the server_default value has to be a string
+    balance = Column(Float, server_default='0', nullable=False)
+    frozen = Column(Boolean, server_default='False', nullable=False)
+    public = Column(Boolean, server_default='False', nullable=False)
+    name = Column(String, nullable=False)
+
+    def __repr__(self):
+        return f"<Account(uuid='{self.uuid}', auth='{self.auth}', balance='{self.balance}', frozen='{self.frozen}', public='{self.public}', name='{self.name}'"
+
+    def get_balance(self):
+        return self.balance
+
+    def get_uuid(self):
+        return self.uuid
+
+    def is_frozen(self) -> bool:
+        """Tells if this account is frozen."""
+        return self.frozen
+
+    def get_authorization(self) -> Authorization:
+        """Gets this account's level of authorization."""
+        return Authorization(self.auth)
+
+    def list_public_keys(self):
+        """Produces a list of all public keys associated with this account.
+           Every element of the list is a string that corresponds to the contents
+           of a PEM file describing an ECC key."""
+        raise NotImplementedError()
+
+    def get_proxies(self):
+        """Gets all accounts that have been authorized as proxies for this account."""
+        raise NotImplementedError()
+
+
 class SQLServer(InMemoryServer):
-    def __init__(self, psswd: str, uname: str="taubot",  db: str="taubot", host: str="localhost"):
-        super().__init__()
-        self.connection = psycopg2.connect(f"dbname='{db}' host='{host}' user='{uname}' password='{psswd}'")
-        cursor = self.connection.cursor()
-        cursor.execute(open("./src/sql/startup.sql").read())
-        cursor.execute("SELECT uuid, name FROM accounts;")
-        self.connection.commit()
-        account_ids = cursor.fetchall()
-        for account_id in account_ids:
 
+    def __init__(self, psswd=None, uname: str = "taubot", db: str = "taubot", host: str = "localhost", db_type="postgresql", url=None, **kwargs):
+        url = f"{db_type}://{uname}{f':{psswd}' if psswd is not None else ''}@{host}/{db}" if url is None else url
+        print(url)
+        self.engine = sqlalchemy.create_engine(url, **kwargs)
+        Session.configure(bind=self.engine)
+        self.session = Session()
+        Base.metadata.create_all(self.engine)
+        gov_acc = self.session.query(Account).filter_by(name="@government").one_or_none()
+        if gov_acc is None:
+            gov_acc = Account(uuid=uuid.uuid4(), name="@government")
+            self.session.add(gov_acc)
+        self.authorize(RedditAccountId("@government"), gov_acc, Authorization.DEVELOPER)
+        self.session.commit()
 
-    def open_account(self, id: AccountId, account_uuid=None):
+    def __enter__(self):
+        return self
 
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
 
+    def open_account(self, id: AccountId, account_uuid=None) -> Account:
+        account_uuid = account_uuid if account_uuid is not None else uuid.uuid4()
+        if self.has_account(id):
+            raise Exception("Account already exists.")
+        account = Account(uuid=account_uuid, name=str(id))
+        self.session.add(account)
+        self.session.commit()
+        return account
 
+    def add_account_alias(self, account: Account, alias_id: AccountId):
+        raise NotImplementedError()
 
-class PersistantAccount(InMemoryAccount):
-    def __init__(self, uuid: str, connection):
-        super().__init__(uuid)
-        self.connection = connection
+    def get_account(self, id: AccountId) -> Account:
+        id = str(id)
+        if not self.has_account(id):
+            raise Exception("That account does not exist")
+        return self.session.query(Account).filter_by(name=id).one()
 
-    def set_balance(self, bal):
-        super().set_balance(bal)
-        cursor = self.connection.cursor()
-        cursor.execute("UPDATE accounts SET balance = '%s' WHERE uuid = '%s';", [bal, self.uuid])
+    def get_accounts(self) -> List[Account]:
+        return self.session.query(Account).all()
 
+    def get_account_ids(self, account: Account) -> List[AccountId]:
+        return [account.name]  # TODO: get aliases and stuff working this is only a temporary solution
 
+    def get_account_id(self, account: Account) -> AccountId:
+        return RedditAccountId(account.name)
 
+    def has_account(self, id: AccountId) -> bool:
+        return not (self.session.query(Account).filter_by(name=str(id)).one_or_none() is None)
 
+    def get_government_account(self) -> Account:
+        return self.get_account(RedditAccountId("@government"))
 
+    def authorize(self, author: AccountId, account: Account, auth_level: Authorization):
+        account.auth = auth_level.value
+        self.session.commit()
 
+    def set_frozen(self, author: AccountId, account: Account, is_frozen: bool):
+        super().set_frozen(author, account, is_frozen)
+        self.session.commit()
 
+    def print_money(self, author: AccountId, account: Account, amount: Fraction):
+        super().print_money(author, account, amount)
+        self.session.commit()
 
+    def add_public_key(self, account: Account, key):
+        raise NotImplementedError()
 
+    def add_proxy(self, author: AccountId, account: Account, proxied_account: Account):
+        raise NotImplementedError()
 
+    def remove_proxy(self, author: AccountId, account: Account, proxied_account: Account) -> bool:
+        raise NotImplementedError()
+
+    def get_recurring_transfer(self, id: str) -> RecurringTransfer:
+        raise NotImplementedError()
+
+    def list_recurring_transfers(self):
+        raise NotImplementedError()
+
+    def create_recurring_transfer(self, author: AccountId, source, destination, total_amount, tick_count, transfer_id=None):
+        raise NotImplementedError()
+
+    def notify_tick_elapsed(self, tick_timestamp=None):
+        pass
+
+    def transfer(self, author: AccountId, source: Account, destination: Account, amount: float):
+        super().transfer(author, source, destination, amount)
+        self.session.commit()
 
