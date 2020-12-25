@@ -11,7 +11,6 @@ from sqlalchemy import String, Integer, Boolean, Column, ForeignKey, Float
 from sqlalchemy.orm import sessionmaker, relationship, backref
 from sqlalchemy.types import CHAR
 
-
 from fractions import Fraction
 from functools import total_ordering
 from collections import defaultdict
@@ -354,7 +353,7 @@ class InMemoryServer(Server):
         self.inv_accounts[account].append(id)
         return account
 
-    def delete_account(self, id: AccountId, account_uuid=None):
+    def delete_account(self, author: AccountId, id: AccountId):
         if self.has_account(id):
             account = self.accounts[id]
             to_be_deleted = []
@@ -722,6 +721,51 @@ class WealthTaxBracket:
             return tax_amount
 
 
+class SQLTaxBracket(Base):
+    __tablename__ = 'tax'
+
+    uuid = Column(CHAR(36), primary_key=True)
+    start = Column(Float, nullable=False)
+    end = Column(Float, nullable=False)
+    rate = Column(Float, nullable=False)
+    name = Column(String, nullable=False)
+    exempt_prefixes = ["&",
+                       "@"]  # TODO: make account types an attribute stored in the database along with exempt prefixes
+
+    def __repr__(self):
+        return f"<SQLTaxBracket(uuid='{self.uuid}', start={self.start}, end={self.end}, rate={self.rate})>"
+
+    def set_rate(self, rate):
+        # sets tax rate
+        self.rate = rate
+
+    def get_rate(self):
+        return self.rate
+
+    def set_end(self, end):
+        self.end = end
+
+    def set_start(self, start):
+        self.start = start
+
+    def get_start(self):
+        return self.start
+
+    def get_end(self):
+        return self.end
+
+    def get_tax(self, account):
+        bal = account.get_balance()
+        if bal < self.start:
+            return 0
+        elif self.end is None or bal <= self.end:
+            tax_amount = round(((bal - self.start) / 100) * self.tax_rate)
+            return tax_amount
+        elif bal > self.end:
+            tax_amount = round(((self.end - self.start) / 100) * self.tax_rate)
+            return tax_amount
+
+
 class TaxException(Exception):
     pass
 
@@ -729,23 +773,30 @@ class TaxException(Exception):
 class TaxMan:
 
     def __init__(self, server, tax_regularity=28, auto_tax=False):
-        self.tax_brackets = {}
         self.ticks_till_tax = tax_regularity
         self.ticks_till_tax_tmp = self.ticks_till_tax
         self.server = server
+        self.session = server.session
         self.autoTax = auto_tax
 
-    def get_bracket(self, name):
-        return self.tax_brackets[name]
+    def get_session(self) -> sqlalchemy.orm.Session:
+        return self.session
 
-    def add_tax_bracket(self, min_amount, max_amount, rate, name):
-        self.tax_brackets[name] = WealthTaxBracket(min_amount, max_amount, rate)
+    def get_bracket(self, name=None, tax_uuid=None):
+        filter_dict = {"uuid": tax_uuid} if tax_uuid is not None else {"name": name} if name is not None else None
+        if filter_dict is None:
+            raise Exception("you need to specify a name or uuid")
+        return self.get_session().query(SQLTaxBracket).filter_by(**filter_dict).one_or_none()
 
-    def remove_tax_bracket(self, name):
+    def add_tax_bracket(self, min_amount, max_amount, rate, name, tax_uuid=None):
+        tax_uuid = tax_uuid if tax_uuid is not None else uuid.uuid4()
+        self.get_session().add(SQLTaxBracket(uuid=tax_uuid, start=min_amount, end=max_amount, rate=rate, name=name))
+
+    def remove_tax_bracket(self, name=None, tax_uuid=None):
         try:
-            del self.tax_brackets[name]
+            self.get_session().delete(self.get_bracket(tax_uuid=tax_uuid, name=name))
         except KeyError as e:
-            raise TaxException("That Account Doesn't Exist SMH")
+            raise TaxException("That Bracket Doesn't Exist SMH")
 
     def force_ticks(self, amount=1):
         """Only works temporarily is purely for testing purposes"""
@@ -775,24 +826,25 @@ class TaxMan:
         if bracket is not None:
             brackets = [bracket]
         else:
-            brackets = self.tax_brackets.keys()
+            brackets = self.tax_brackets.values()
 
-        for key in brackets:
+        for tax_uuid in brackets:
             for account in self.server.list_accounts():
                 if self.server.get_account_id(account).startswith(
-                        tuple(self.tax_brackets[key].exempt_prefixes)): continue
-                value += self.tax_brackets[key].get_tax(account)
+                        tuple(self.get_bracket(tax_uuid=tax_uuid).exempt_prefixes)): continue
+                value += self.get_bracket(tax_uuid=tax_uuid).get_tax(account)
 
         return value
 
     def tax(self):
         self.ticks_till_tax_tmp = self.ticks_till_tax
         i = 0
+        print(self.tax_brackets)
         for tax_bracket in self.tax_brackets:
             for account in self.server.list_accounts():
                 i += 1
 
-                if self.server.get_account_id(account).startswith(
+                if str(self.server.get_account_id(account)).startswith(
                         tuple(self.tax_brackets[tax_bracket].exempt_prefixes)): continue
                 tax_amount = self.tax_brackets[tax_bracket].get_tax(account)
                 if tax_amount != 0:
@@ -1146,14 +1198,14 @@ class Account(Base):
     __tablename__ = 'accounts'
 
     uuid = Column(CHAR(36), primary_key=True)
-    auth = Column(Integer, server_default='0', nullable=False)  # for some reason the server_default value has to be a string
+    auth = Column(sqlalchemy.types.Enum(Authorization), server_default='CITIZEN', nullable=False)
     balance = Column(Float, server_default='0', nullable=False)
     frozen = Column(Boolean, server_default='False', nullable=False)
     public = Column(Boolean, server_default='False', nullable=False)
     name = Column(String, nullable=False)
 
     def __repr__(self):
-        return f"<Account(uuid='{self.uuid}', auth='{self.auth}', balance='{self.balance}', frozen='{self.frozen}', public='{self.public}', name='{self.name}'"
+        return f"<Account(uuid='{self.uuid}', auth={self.auth}, balance={self.balance}, frozen={self.frozen}, public={self.public}, name='{self.name}'"
 
     def get_balance(self):
         return self.balance
@@ -1167,7 +1219,7 @@ class Account(Base):
 
     def get_authorization(self) -> Authorization:
         """Gets this account's level of authorization."""
-        return Authorization(self.auth)
+        return self.auth
 
     def list_public_keys(self):
         """Produces a list of all public keys associated with this account.
@@ -1180,12 +1232,27 @@ class Account(Base):
         raise NotImplementedError()
 
 
-class SQLServer(InMemoryServer):
+class Configuration(Base):
+    __tablename__ = 'configuration'
 
-    def __init__(self, psswd=None, uname: str = "taubot", db: str = "taubot", host: str = "localhost", db_type="postgresql", url=None, **kwargs):
-        url = f"{db_type}://{uname}{f':{psswd}' if psswd is not None else ''}@{host}/{db}" if url is None else url
-        print(url)
-        self.engine = sqlalchemy.create_engine(url, **kwargs)
+    key = Column(String, primary_key=True)
+    value = Column(String)
+
+    def __repr__(self):
+        return f"<Configuration(key='{self.key}', value='{self.value}')>"
+
+
+class DBType(Enum):
+    """A list of all the database types supported"""
+    POSTGRES = "postgresql"
+    SQLITE = "sqlite"
+
+
+class SQLServer(InMemoryServer):
+    def __init__(self, psswd=None, uname: str = "taubot", db: str = "taubot", host: str = "localhost",
+                 db_type=DBType.POSTGRES, url=None):
+        url = url if url is not None else f"{db_type.value}://{uname}{f':{psswd}' if psswd is not None else ''}@{host}/{db}"
+        self.engine = sqlalchemy.create_engine(url, echo=True)
         Session.configure(bind=self.engine)
         self.session = Session()
         Base.metadata.create_all(self.engine)
@@ -1195,12 +1262,16 @@ class SQLServer(InMemoryServer):
             self.session.add(gov_acc)
         self.authorize(RedditAccountId("@government"), gov_acc, Authorization.DEVELOPER)
         self.session.commit()
+        self.ticks_till_tax = self.get_session().query(Configuration).filter_by(key="TAX-REGULARITY").one_or_none()
+        self.ticks_till_tax = int(self.ticks_till_tax.value) if self.ticks_till_tax is not None else 28
+        self.ticks_till_tax_tmp = self.get_session().query(Configuration).filter_by(key="TAX-TICKS-LEFT").one_or_none()
+        self.ticks_till_tax_tmp = int(self.ticks_till_tax_tmp.value) if self.ticks_till_tax_tmp is not None else self.ticks_till_tax
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
+        self.get_session().flush()
 
     def open_account(self, id: AccountId, account_uuid=None) -> Account:
         account_uuid = account_uuid if account_uuid is not None else uuid.uuid4()
@@ -1210,6 +1281,11 @@ class SQLServer(InMemoryServer):
         self.session.add(account)
         self.session.commit()
         return account
+
+    def delete_account(self, author: AccountId, id: AccountId):
+        self.get_session().delete(self.get_account(id))
+        self.get_session().commit()
+        return True
 
     def add_account_alias(self, account: Account, alias_id: AccountId):
         raise NotImplementedError()
@@ -1229,14 +1305,14 @@ class SQLServer(InMemoryServer):
     def get_account_id(self, account: Account) -> AccountId:
         return RedditAccountId(account.name)
 
-    def has_account(self, id: AccountId) -> bool:
+    def has_account(self, id: Union[AccountId, str]) -> bool:
         return not (self.session.query(Account).filter_by(name=str(id)).one_or_none() is None)
 
     def get_government_account(self) -> Account:
         return self.get_account(RedditAccountId("@government"))
 
     def authorize(self, author: AccountId, account: Account, auth_level: Authorization):
-        account.auth = auth_level.value
+        account.auth = auth_level
         self.session.commit()
 
     def set_frozen(self, author: AccountId, account: Account, is_frozen: bool):
@@ -1262,7 +1338,8 @@ class SQLServer(InMemoryServer):
     def list_recurring_transfers(self):
         raise NotImplementedError()
 
-    def create_recurring_transfer(self, author: AccountId, source, destination, total_amount, tick_count, transfer_id=None):
+    def create_recurring_transfer(self, author: AccountId, source, destination, total_amount, tick_count,
+                                  transfer_id=None):
         raise NotImplementedError()
 
     def notify_tick_elapsed(self, tick_timestamp=None):
@@ -1272,3 +1349,38 @@ class SQLServer(InMemoryServer):
         super().transfer(author, source, destination, amount)
         self.session.commit()
 
+    def add_tax_bracket(self, author: AccountId, start, end, rate, name, tax_uuid=None):
+        self.session.add(
+            SQLTaxBracket(
+                uuid=tax_uuid if tax_uuid is not None else uuid.uuid4(),
+                start=start,
+                end=end,
+                rate=rate,
+                name=name
+            )
+        )
+        self.session.commit()
+
+    def get_session(self) -> sqlalchemy.orm.Session:
+        return self.session
+
+    def get_tax_brackets(self):
+        return self.get_session().query(SQLTaxBracket).all()
+
+    def get_tax_bracket(self, name=None, uuid=None):
+        if uuid is None and name is None:
+            raise Exception("You must specify at least a name or a uuid")
+        kwargs = {"uuid": uuid} if uuid is not None else {"name": name}
+        return self.get_session().query(SQLTaxBracket).filter_by(**kwargs)
+
+    def tax(self, author):
+        self.ticks_till_tax_tmp = self.ticks_till_tax
+
+        for tax_bracket in self.get_tax_brackets():
+            for account in self.get_accounts():
+                if str(self.get_account_id(account)).startswith(
+                        tuple(tax_bracket.exempt_prefixes)): continue
+                tax_amount = tax_bracket.get_tax(account)
+                if tax_amount != 0:
+                    self.transfer(RedditAccountId('@government'), account, self.get_government_account(), tax_amount)
+        return

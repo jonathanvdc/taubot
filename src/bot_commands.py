@@ -635,7 +635,7 @@ _add_command(
 
 def _add_tax_bracket(
         author: Union[AccountId, str],
-        start: float, rate: float, end: float,
+        start: float,  end: float, rate: float,
         name: str, rest: str, server: Server) -> str:
     end = end if end >= 0 else None
     commands.add_tax_bracket(

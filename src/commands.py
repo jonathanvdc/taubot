@@ -138,7 +138,7 @@ def transfer(
         author_id: Union[AccountId, str],
         source_id: Union[AccountId, str],
         destination_id: Union[AccountId, str],
-        amount: Fraction, server: Server):
+        amount: float, server: Server):
     """Transfer amount ¤ from source to destination with authorization
        from author on server"""
     author = _get_account(author_id, server)
@@ -204,7 +204,7 @@ def unfreeze_account(
 
 def balance(
         author_id: Union[AccountId, str],
-        account_id: Union[AccountId, str], server: Server) -> Fraction:
+        account_id: Union[AccountId, str], server: Server) -> float:
     """Get the balance of account with authorization from author"""
     author = _get_account(author_id, server)
     account = _get_account(account_id, server)
@@ -215,7 +215,7 @@ def balance(
 
 def get_money_supply(
         author: Union[AccountId, str],
-        server: Server) -> Fraction:
+        server: Server) -> float:
     """Return sum of all account balances"""
     return sum(acc.get_balance() for acc in server.get_accounts())
 
@@ -251,7 +251,7 @@ def list_public_accounts(author: Union[AccountId, str], server: Server) -> List[
 def print_money(
         author_id: Union[AccountId, str],
         account_id: Union[AccountId, str],
-        amount: Fraction, server: Server):
+        amount: float, server: Server):
     """Print an amount of money into an account,
        with the authorization of author, on server
        """
@@ -268,7 +268,7 @@ def print_money(
 def remove_funds(
         author_id: Union[AccountId, str],
         account_id: Union[AccountId, str],
-        amount: Fraction, server: Server):
+        amount: float, server: Server):
     """Remove funds from an account. Rules applying to
        print_money apply.
        """
@@ -286,7 +286,7 @@ def create_recurring_transfer(
         author_id: Union[AccountId, str],
         sender_id: Union[AccountId, str],
         destination_id: Union[AccountId, str],
-        amount: Fraction, tick_count: int, server: Server):
+        amount: float, tick_count: int, server: Server):
     """Create a recurring transfer."""
     author = _get_account(author_id, server)
     sender = _get_account(sender_id, server)
@@ -394,8 +394,8 @@ def delete_account(
 
 def add_tax_bracket(
         author: Union[AccountId, str],
-        start: Fraction, end: Fraction,
-        rate: Fraction, name: str, server: Server):
+        start: float, end: float,
+        rate: float, name: str, server: Server):
     """Add a tax bracket to a server with authorization from author"""
     author = _get_account(author, server)
     _assert_authorized(author, None)
