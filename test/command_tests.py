@@ -1,21 +1,25 @@
 #!/usr/bin/env python3
 
 import sys
-from os import path, remove
+from os import path, remove, getenv
+import json
+
 sys.path.append(path.join(path.dirname(
     path.dirname(path.abspath(__file__))), 'src'))
 
 from fractions import Fraction
 from bot_commands import run_command
-from accounting import RedditAccountId, InMemoryServer, Server, Authorization, LedgerServer
+from accounting import RedditAccountId, InMemoryServer, Server, Authorization, LedgerServer, SQLServer
 from typing import Sequence
 from base64 import b64encode
 import unittest
+
 
 def run_all(elements, action):
     """Runs an action on every element of a list."""
     for item in elements:
         action(item)
+
 
 def run_command_stream(server, *commands):
     """Runs a sequence of commands (formatted as author, command pairs) on a server."""
@@ -24,24 +28,18 @@ def run_command_stream(server, *commands):
         responses.append(run_command(author, cmd, server))
     return responses
 
+
 def create_test_servers() -> Sequence[Server]:
     """Creates a sequence of test servers."""
     # First test with an in-memory server.
-    yield InMemoryServer()
+    config = open("test-bot-config.json", "r")
+    config_json = json.load(config)
+    with SQLServer(**config_json) as server:
+        server.reset()
 
-    # Then test with a clean ledger server.
-    ledger_path = 'test-ledger.txt'
-    try:
-        remove(ledger_path)
-    except:
-        pass
+    with SQLServer(**config_json) as server:
+        yield server
 
-    with LedgerServer(ledger_path) as ledger_server:
-        yield ledger_server
-
-    # Load the ledger to ensure that the created ledger remains readable.
-    with LedgerServer(ledger_path) as ledger_server:
-        pass
 
 
 class ServerTests(unittest.TestCase):
@@ -121,7 +119,7 @@ class CommandTests(unittest.TestCase):
             admin_id = RedditAccountId('admin')
             admin = server.open_account(admin_id)
             server.authorize(admin_id, admin, Authorization.ADMIN)
-            server.print_money(admin_id, admin, Fraction('123.1'))
+            server.print_money(admin_id, admin, float('123.1'))
 
             self.assertIn(
                 '123.1',
@@ -137,12 +135,12 @@ class CommandTests(unittest.TestCase):
             user_id = RedditAccountId('general-kenobi')
             admin = server.open_account(admin_id)
             server.authorize(admin_id, admin, Authorization.ADMIN)
-            server.print_money(admin_id, admin, Fraction('123.1'))
+            server.print_money(admin_id, admin, float('123.1'))
             user = server.open_account(user_id)
-            server.print_money(user_id, user, Fraction('123'))
+            server.print_money(user_id, user, float('123'))
 
             self.assertIn(
-                '246 1/10',
+                '246.1',
                 ''.join(
                     run_command_stream(
                         server,
@@ -421,6 +419,41 @@ class CommandTests(unittest.TestCase):
             run_command_stream(server, (alias_id, 'proxy admin \n\n transfer 20 general-kenobi'))[0]
             self.assertEqual(admin.get_balance(), 180)
             self.assertEqual(alias.get_balance(), 20)
+
+    def test_tax(self):
+        for server in create_test_servers():
+            admin_id = RedditAccountId('admin')
+            account_id = RedditAccountId('citizen')
+            admin = server.open_account(admin_id)
+            account = server.open_account(account_id)
+            server.authorize(admin_id, admin, Authorization.DEVELOPER)
+            server.print_money(admin_id, account, 2000)
+            run_command_stream(server, (admin_id, 'add-tax-bracket 0 500 10 Tax10%'))
+            run_command_stream(server, (admin_id, 'add-tax-bracket 500 1000 20 Tax20%'))
+            run_command_stream(server, (admin_id, 'add-tax-bracket 1000 2000 50 Tax50%'))
+
+            run_command_stream(server, (admin_id, 'force-tax'))
+            self.assertEqual(account.get_balance(), 1425)
+            self.assertEqual(server.get_government_account().get_balance(), 575)
+
+    def test_auto_tax(self):
+        for server in create_test_servers():
+            admin_id = RedditAccountId('admin')
+            account_id = RedditAccountId('citizen')
+            admin = server.open_account(admin_id)
+            account = server.open_account(account_id)
+            server.authorize(admin_id, admin, Authorization.DEVELOPER)
+            server.print_money(admin_id, account, 2000)
+            run_command_stream(server, (admin_id, 'add-tax-bracket 0 500 10 Tax10%'))
+            run_command_stream(server, (admin_id, 'add-tax-bracket 500 1000 20 Tax20%'))
+            run_command_stream(server, (admin_id, 'add-tax-bracket 1000 2000 50 Tax50%'))
+            run_command_stream(server, (admin_id, 'auto-tax'))
+            for i in range(100):
+                server.notify_tick_elapsed()
+            self.assertEqual(account.get_balance(), 1425)
+            self.assertEqual(server.get_government_account().get_balance(), 575)
+
+
 
 if __name__ == '__main__':
     unittest.main()

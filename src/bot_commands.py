@@ -140,11 +140,11 @@ def _name(
         author: Union[AccountId, str],
         rest: str,
         server: Server):
-    return f"Your ID for the purpose of accounting is {commands.name(author, server)}"
+    return f"Your ID for the purpose of accounting is `{commands.name(author, server)}`"
 
 
 def _rob(author: str, *args, **kwargs):
-    """IMADEAREDDITACCOUNT5 told me too"""
+    """imade told me to"""
     return f"<@&600079868226699274>, {author} is trying to steal money the filthy {random.choice(['capitalist', 'communist'])}"
 
 
@@ -352,7 +352,7 @@ def _money_supply(
         author: Union[AccountId, str],
         rest: str, server: Server) -> str:
     bal = commands.get_money_supply(author, server)
-    return f"The total money supply is {_mixed(bal)}"
+    return f"The total money supply is {bal}"
 
 
 _add_command(

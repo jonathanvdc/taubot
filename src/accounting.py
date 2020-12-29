@@ -7,9 +7,10 @@ import base64
 # sqlalchemy stuff
 import sqlalchemy
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import String, Integer, Boolean, Column, ForeignKey, Float
+from sqlalchemy import String, Integer, Boolean, Column, ForeignKey, Float, DateTime
 from sqlalchemy.orm import sessionmaker, relationship, backref
 from sqlalchemy.types import CHAR
+from sqlalchemy.sql import func
 
 from fractions import Fraction
 from functools import total_ordering
@@ -21,6 +22,7 @@ from Crypto.PublicKey import ECC
 
 Base = declarative_base()
 Session = sessionmaker()
+DEFAULT = sqlalchemy.text("default")
 
 
 class AccountId(object):
@@ -430,11 +432,11 @@ class InMemoryServer(Server):
 
         return not prev_in
 
-    def print_money(self, author: AccountId, account: base_account, amount: Fraction):
+    def print_money(self, author: AccountId, account: base_account, amount: float):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
         account.balance += amount
 
-    def remove_funds(self, author: base_account, account: base_account, amount: Fraction):
+    def remove_funds(self, author: AccountId, account: base_account, amount: float):
         account.balance -= amount
 
     def transfer(self, author: AccountId, source: base_account, destination: base_account, amount: Fraction):
@@ -759,10 +761,10 @@ class SQLTaxBracket(Base):
         if bal < self.start:
             return 0
         elif self.end is None or bal <= self.end:
-            tax_amount = round(((bal - self.start) / 100) * self.tax_rate)
+            tax_amount = round(((bal - self.start) / 100) * self.rate)
             return tax_amount
         elif bal > self.end:
-            tax_amount = round(((self.end - self.start) / 100) * self.tax_rate)
+            tax_amount = round(((self.end - self.start) / 100) * self.rate)
             return tax_amount
 
 
@@ -1198,14 +1200,26 @@ class Account(Base):
     __tablename__ = 'accounts'
 
     uuid = Column(CHAR(36), primary_key=True)
-    auth = Column(sqlalchemy.types.Enum(Authorization), server_default='CITIZEN', nullable=False)
-    balance = Column(Float, server_default='0', nullable=False)
-    frozen = Column(Boolean, server_default='False', nullable=False)
-    public = Column(Boolean, server_default='False', nullable=False)
-    name = Column(String, nullable=False)
+    auth = Column(sqlalchemy.types.Enum(Authorization), server_default='CITIZEN', nullable=True)
+    balance = Column(Float, server_default='0', nullable=True)
+    frozen = Column(Boolean, server_default='False', nullable=True)
+    public = Column(Boolean, server_default='False', nullable=True)
+
+    """
+    In order to maintain an audit log I'm leaving accounts that have been deleted in the database and flagging them as deleted,
+    I will also nullify there balance and the other flags, if they reopen an account we will reactivate this account
+    """
+
+    deleted = Column(Boolean, server_default='False', nullable=False)
+
+    names = relationship("Alias")
+
+    public_keys = relationship("PublicKey")
+
+    proxies = relationship("Proxy", foreign_keys="Proxy.account")
 
     def __repr__(self):
-        return f"<Account(uuid='{self.uuid}', auth={self.auth}, balance={self.balance}, frozen={self.frozen}, public={self.public}, name='{self.name}'"
+        return f"<Account(uuid='{self.uuid}', auth={self.auth}, balance={self.balance}, frozen={self.frozen}, public={self.public}>"
 
     def get_balance(self):
         return self.balance
@@ -1225,11 +1239,12 @@ class Account(Base):
         """Produces a list of all public keys associated with this account.
            Every element of the list is a string that corresponds to the contents
            of a PEM file describing an ECC key."""
-        raise NotImplementedError()
+        return [ECC.import_key(base64.b64decode(key.key).decode('utf-8')) for key in self.public_keys]
 
     def get_proxies(self):
         """Gets all accounts that have been authorized as proxies for this account."""
-        raise NotImplementedError()
+        print(self.proxies)
+        return [proxy.proxy_account for proxy in self.proxies]
 
 
 class Configuration(Base):
@@ -1242,71 +1257,180 @@ class Configuration(Base):
         return f"<Configuration(key='{self.key}', value='{self.value}')>"
 
 
-class DBType(Enum):
-    """A list of all the database types supported"""
-    POSTGRES = "postgresql"
-    SQLITE = "sqlite"
+class Transaction(Base):
+    __tablename__ = 'transactions'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source = Column(CHAR(36), ForeignKey('accounts.uuid'), nullable=True)
+    destination = Column(CHAR(36), ForeignKey('accounts.uuid'), nullable=True)
+    value = Column(Float)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+    def __repr__(self):
+        return f"<Transaction(id={self.id}, source='{self.source}', destination='{self.destination}', value={self.value}, timestamp={self.timestamp.__repr__()})>"
+
+
+class PublicKey(Base):
+    __tablename__ = 'public_keys'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)  # the orm needs a primary key to construct the object
+    account = Column(CHAR(36), ForeignKey('accounts.uuid'), nullable=False)
+    key = Column(CHAR(320), nullable=False)
+
+    def __repr__(self):
+        return f"<PublicKey(id={self.id}, account='{self.account}', key='{self.key}')>"
+
+
+class Alias(Base):
+    __tablename__ = 'aliases'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    account = Column(CHAR(36), ForeignKey('accounts.uuid'), nullable=False)
+    account_object = relationship("Account")
+    alias_id = Column(String, nullable=False)
+
+
+class Proxy(Base):
+    __tablename__ = 'proxies'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    account = Column(CHAR(36), ForeignKey('accounts.uuid'), nullable=False)
+    proxy_account_id = Column(CHAR(36), ForeignKey('accounts.uuid'), nullable=False)
+    proxy_account = relationship("Account", foreign_keys=[proxy_account_id])
+
+    def __repr__(self):
+        return f"<Proxy id={self.id}, account='{self.account}', proxy_account='{self.proxy_account}'"
 
 
 class SQLServer(InMemoryServer):
+    """
+    A server object that uses a SQL database for persistence rather than the Ledger, this means faster start up times
+    but has the disadvantage of being harder to audit, all SQL databases *should* be supported but was designed
+    using postgresql.
+
+    :param psswd: this is the password to be used when connecting to the database, leave as None if no password is needed
+    :param uname: this is the username to connect to the database with defaults to 'taubot'
+    :param db: this is the database to connect to defaults to 'taubot'
+    :param host: this is the host to connect to defaults to 'localhost'
+    :param db_type: the database type to connect too defaults to 'localhost'
+    :param url: optional connection url will override the previous parameters
+    """
+
     def __init__(self, psswd=None, uname: str = "taubot", db: str = "taubot", host: str = "localhost",
-                 db_type=DBType.POSTGRES, url=None):
-        url = url if url is not None else f"{db_type.value}://{uname}{f':{psswd}' if psswd is not None else ''}@{host}/{db}"
-        self.engine = sqlalchemy.create_engine(url, echo=True)
+                 db_type="postgresql", url=None):
+
+        url = url \
+            if url is not None else f"{db_type}://{uname}{f':{psswd}' if psswd is not None else ''}@{host}/{db}" \
+            if db_type != 'sqlite' else f'sqlite:///{db}'
+        self.engine = sqlalchemy.create_engine(url)
         Session.configure(bind=self.engine)
         self.session = Session()
         Base.metadata.create_all(self.engine)
-        gov_acc = self.session.query(Account).filter_by(name="@government").one_or_none()
-        if gov_acc is None:
-            gov_acc = Account(uuid=uuid.uuid4(), name="@government")
-            self.session.add(gov_acc)
-        self.authorize(RedditAccountId("@government"), gov_acc, Authorization.DEVELOPER)
+        gov_id = RedditAccountId("@government")
+        if not self.has_account(gov_id):
+            gov_acc = self.open_account(gov_id)
+            self.authorize(gov_id, gov_acc, Authorization.DEVELOPER)
+
+        def read_config(key, default_value) -> str:
+            value = self.get_session().query(Configuration).filter_by(key=key).one_or_none()
+            if value is None:
+                value = Configuration(key=key, value=str(default_value))
+                self.get_session().add(value)
+            value = value.value
+
+            return value
+
+        self.ticks_till_tax = int(read_config("TAX-REGULARITY", 28-1))
+
+        self.ticks_till_tax_tmp = int(read_config("TAX-TICKS-LEFT", self.ticks_till_tax))
+
+        self.auto_tax = read_config("DO-AUTO-TAX", False).lower() == 'true'
+
         self.session.commit()
-        self.ticks_till_tax = self.get_session().query(Configuration).filter_by(key="TAX-REGULARITY").one_or_none()
-        self.ticks_till_tax = int(self.ticks_till_tax.value) if self.ticks_till_tax is not None else 28
-        self.ticks_till_tax_tmp = self.get_session().query(Configuration).filter_by(key="TAX-TICKS-LEFT").one_or_none()
-        self.ticks_till_tax_tmp = int(self.ticks_till_tax_tmp.value) if self.ticks_till_tax_tmp is not None else self.ticks_till_tax
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.get_session().flush()
+        self.get_session().close()
+
+    def notify_tick_elapsed(self, **kwargs):
+        # TODO: implement auto-tax and recurring transfers
+        pass
+
+    def reset(self):
+        """drop all tables"""
+        self.session.close()
+        Base.metadata.drop_all(self.engine)
+        Base.metadata.create_all(self.engine)
 
     def open_account(self, id: AccountId, account_uuid=None) -> Account:
-        account_uuid = account_uuid if account_uuid is not None else uuid.uuid4()
+        """
+        opens a new account,
+        if the account was once deleted it will reactivate that account rather than creating a new one.
+
+        :param id: the id to use with the account
+        :param account_uuid: the uuid to use with the account
+        :return: the new account object
+        """
+        account_uuid = account_uuid if account_uuid is not None else str(uuid.uuid4())
         if self.has_account(id):
             raise Exception("Account already exists.")
-        account = Account(uuid=account_uuid, name=str(id))
-        self.session.add(account)
+        if self.has_account(id, deleted=True):
+            account = self.get_account(id, deleted=True)
+            self.get_session().query(Account).filter_by(uuid=account.get_uuid(), deleted=True).update(
+                {"balance": DEFAULT, "auth": DEFAULT, "frozen": DEFAULT, "public": DEFAULT, "deleted": False},
+                synchronize_session=False)
+        else:
+            account = Account(uuid=account_uuid)
+            self.session.add(account)
+            self.add_account_alias(account, id)
+
         self.session.commit()
         return account
 
-    def delete_account(self, author: AccountId, id: AccountId):
-        self.get_session().delete(self.get_account(id))
+    def delete_account(self, author: AccountId, id: AccountId) -> bool:
+        """
+        marks an account as deleted and marks all the accounts values as null
+        apart from the uuid and name to make the account auditable
+
+        :param author: the person who authorised the accounts deletion
+        :param id: the id of the account that is due to be deleted
+        :return: whether or not the account was deleted successfully
+        """
+        self.get_session().query(Account).filter_by(name=str(id)).update(
+            {"balance": None, "auth": None, "frozen": None, "public": None, "deleted": True}
+        )
         self.get_session().commit()
         return True
 
     def add_account_alias(self, account: Account, alias_id: AccountId):
-        raise NotImplementedError()
+        self.get_session().add(Alias(account=account.get_uuid(), alias_id=str(alias_id)))
+        self.get_session().commit()
 
-    def get_account(self, id: AccountId) -> Account:
+    def get_account(self, id: AccountId, deleted=False) -> Account:
         id = str(id)
-        if not self.has_account(id):
-            raise Exception("That account does not exist")
-        return self.session.query(Account).filter_by(name=id).one()
+        account_id = self.get_session().query(Alias).filter_by(alias_id=id).one_or_none()
+        if account_id is None:
+            raise Exception("Account does not exist")
+        account = account_id.account_object
+        if account.deleted != deleted:
+            raise Exception("Account does not exist")
+        return account
 
     def get_accounts(self) -> List[Account]:
-        return self.session.query(Account).all()
+        return self.session.query(Account).filter_by(deleted=False).all()
 
     def get_account_ids(self, account: Account) -> List[AccountId]:
-        return [account.name]  # TODO: get aliases and stuff working this is only a temporary solution
+        return [alias.alias_id for alias in account.names]
 
-    def get_account_id(self, account: Account) -> AccountId:
-        return RedditAccountId(account.name)
-
-    def has_account(self, id: Union[AccountId, str]) -> bool:
-        return not (self.session.query(Account).filter_by(name=str(id)).one_or_none() is None)
+    def has_account(self, id: Union[AccountId, str], deleted=False) -> bool:
+        try:
+            self.get_account(id, deleted)
+            return True
+        except:
+            return False
 
     def get_government_account(self) -> Account:
         return self.get_account(RedditAccountId("@government"))
@@ -1319,18 +1443,36 @@ class SQLServer(InMemoryServer):
         super().set_frozen(author, account, is_frozen)
         self.session.commit()
 
-    def print_money(self, author: AccountId, account: Account, amount: Fraction):
+    def print_money(self, author: AccountId, account: Account, amount: float):
+        self.get_session().add(Transaction(source=None, destination=account.get_uuid(), value=amount))
         super().print_money(author, account, amount)
         self.session.commit()
 
+    def remove_funds(self, author: AccountId, account: Account, amount: float):
+        self.get_session().add(Transaction(source=None, destination=account.get_uuid(), value=amount))
+        super().remove_funds(author, account, amount)
+        self.session.commit()
+
     def add_public_key(self, account: Account, key):
-        raise NotImplementedError()
+        self.get_session().add(
+            PublicKey(
+                account=account.get_uuid(),
+                key=base64.b64encode(key.export_key(format='PEM').encode('utf-8')).decode('utf-8')
+            )
+        )
 
     def add_proxy(self, author: AccountId, account: Account, proxied_account: Account):
-        raise NotImplementedError()
+        if self.get_session().query(Proxy).filter_by(account=proxied_account.get_uuid(),
+                                                     proxy_account_id=account.get_uuid()).one_or_none() is not None:
+            return
+        self.get_session().add(Proxy(account=proxied_account.get_uuid(), proxy_account_id=account.get_uuid()))
+        self.get_session().commit()
 
-    def remove_proxy(self, author: AccountId, account: Account, proxied_account: Account) -> bool:
-        raise NotImplementedError()
+    def remove_proxy(self, author: AccountId, account: Account, proxied_account: Account):
+        proxy = self.get_session().query(Proxy).filter_by(account=proxied_account.get_uuid(),
+                                                          proxy_account_id=account.get_uuid()).first()
+        self.get_session().delete(proxy)
+        self.get_session().commit()
 
     def get_recurring_transfer(self, id: str) -> RecurringTransfer:
         raise NotImplementedError()
@@ -1373,7 +1515,7 @@ class SQLServer(InMemoryServer):
         kwargs = {"uuid": uuid} if uuid is not None else {"name": name}
         return self.get_session().query(SQLTaxBracket).filter_by(**kwargs)
 
-    def tax(self, author):
+    def force_tax(self, author):
         self.ticks_till_tax_tmp = self.ticks_till_tax
 
         for tax_bracket in self.get_tax_brackets():
@@ -1384,3 +1526,7 @@ class SQLServer(InMemoryServer):
                 if tax_amount != 0:
                     self.transfer(RedditAccountId('@government'), account, self.get_government_account(), tax_amount)
         return
+
+    def toggle_auto_tax(self, author):
+        self.auto_tax = not self.auto_tax
+        self.get_session().query(Configuration).filter_by(key="DO-AUTO-TAX").update({"value": self.auto_tax})
