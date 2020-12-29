@@ -29,3 +29,4 @@ jobs:
         echo "{ "psswd": "Password", "db": "taubot-tests"}" > test-bot-config.json
         pip install pytest
         pytest test/all_tests.py
+
