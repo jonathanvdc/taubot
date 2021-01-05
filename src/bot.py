@@ -8,7 +8,7 @@ import asyncio
 import traceback
 import sys
 from aiohttp import web
-from accounting import LedgerServer, Authorization, RedditAccountId, DiscordAccountId, AccountId
+from accounting import SQLServer, Authorization, RedditAccountId, DiscordAccountId, AccountId
 from bot_commands import run_command
 from utils import split_into_chunks, discord_postprocess
 from httpapi import RequestServer
@@ -278,8 +278,8 @@ if __name__ == '__main__':
             messages[message_obj.message.id] = message_obj
 
 
-    ledger_path = config['ledger-path'] if 'ledger-path' in config else 'ledger.txt'
-    with LedgerServer(ledger_path) as server:
+    server_args = config["server_configuration"]
+    with SQLServer(**server_args) as server:
         loop = asyncio.get_event_loop()
 
         # Run the Reddit bot.

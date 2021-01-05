@@ -5,6 +5,10 @@ ledger.txt
 
 # Ignore test files.
 test-ledger.txt
+test.db
+
+# Ignore cli history
+.history
 
 # Ignore Python cruft.
 __pycache__/

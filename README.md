@@ -1,13 +1,13 @@
-# taubot
+# Taubot
 
 This is a Reddit/Discord economy bot implementation in Python.
 
-## Dependencies
+## Installation 
 
-Taubot's dependencies are defined in the `requirements.txt` file. Install them with
+Taubot has a simple install script that will set up the database and install dependencies
 
 ```bash
-pip3 install -r requirements.txt
+./bin/install.sh
 ```
 
 ## Usage
@@ -24,7 +24,13 @@ The bot will need credentials to log into Reddit. Summarize them in a JSON file 
   "server_key": "PEM PRIVATE RSA KEY",
   "prefix": ["Prefix 1", "Prefix 2", "etc"],
   "colour": "Hex code for embed colour",
-  "ledger-path": "/path/to/ledger"
+  "server_configuration": {
+    "url": "An optional SQL database url that will override the other parameters",
+    "dialect": "the dialect to use defaults to postgresql",
+    "uname": "the username to connect with",
+    "psswd": "the password to connect with",
+    "db": "the database to connect to",
+  }
 }
 ```
 Please note that if any of the arguments are missing the bot will print a warning and gracefully degrade into not using the

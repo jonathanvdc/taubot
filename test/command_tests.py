@@ -7,9 +7,8 @@ import json
 sys.path.append(path.join(path.dirname(
     path.dirname(path.abspath(__file__))), 'src'))
 
-from fractions import Fraction
 from bot_commands import run_command
-from accounting import RedditAccountId, InMemoryServer, Server, Authorization, LedgerServer, SQLServer
+from accounting import RedditAccountId, InMemoryServer, Server, Authorization, SQLServer
 from typing import Sequence
 from base64 import b64encode
 import unittest
@@ -31,15 +30,13 @@ def run_command_stream(server, *commands):
 
 def create_test_servers() -> Sequence[Server]:
     """Creates a sequence of test servers."""
-    # First test with an in-memory server.
-    config = open("test-bot-config.json", "r")
-    config_json = json.load(config)
-    with SQLServer(**config_json) as server:
-        server.reset()
+    try:
+        remove("test.db")
+    except:
+        pass
 
-    with SQLServer(**config_json) as server:
+    with SQLServer(url="sqlite:///test.db") as server:  # note that sqlite servers should not be used in deployment
         yield server
-
 
 
 class ServerTests(unittest.TestCase):
@@ -450,9 +447,30 @@ class CommandTests(unittest.TestCase):
             run_command_stream(server, (admin_id, 'auto-tax'))
             for i in range(100):
                 server.notify_tick_elapsed()
-            self.assertEqual(account.get_balance(), 1425)
-            self.assertEqual(server.get_government_account().get_balance(), 575)
+            self.assertEqual(account.get_balance(), 987)
+            self.assertEqual(server.get_government_account().get_balance(), 1013)
 
+    def test_delete_account(self):
+        for server in create_test_servers():
+            admin_id = RedditAccountId('admin')
+            account_id = RedditAccountId('citizen')
+            admin = server.open_account(admin_id)
+            account = server.open_account(account_id)
+            server.authorize(admin_id, admin, Authorization.DEVELOPER)
+            self.assertTrue(server.has_account(account_id))
+            run_command_stream(server, (admin_id, f'admin-delete-account {account_id}'))
+            self.assertFalse(server.has_account(account_id))
+
+    def test_remove_funds(self):
+        for server in create_test_servers():
+            admin_id = RedditAccountId('admin')
+            account_id = RedditAccountId('citizen')
+            admin = server.open_account(admin_id)
+            account = server.open_account(account_id)
+            server.authorize(admin_id, admin, Authorization.DEVELOPER)
+            server.print_money(admin_id, account, 1000)
+            run_command_stream(server, (admin_id, f'remove-funds 100 {account_id}'))
+            self.assertEqual(900, account.get_balance())
 
 
 if __name__ == '__main__':

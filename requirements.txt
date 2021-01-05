@@ -2,5 +2,7 @@ sqlalchemy
 praw
 pycryptodome
 discord.py
+
 # optional only needed for cli
 click
+prompt_toolkit

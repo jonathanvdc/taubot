@@ -1,6 +1,6 @@
 import time
 import base64
-from accounting import Server, base_account, AccountId, Authorization
+from accounting import Server, BaseAccount, AccountId, Authorization
 from accounting import parse_account_id
 from fractions import Fraction
 from typing import Union, Optional, List
@@ -46,7 +46,7 @@ class ProcessCommandException(Exception):
 
 # UTILITY FUNCTIONS (mostly module privates)
 def _check_authorization(
-        subject: base_account, object: base_account,
+        subject: BaseAccount, object: BaseAccount,
         admin_level: Authorization = Authorization.ADMIN,
         min_level: Authorization = Authorization.CITIZEN) -> bool:
     """Check whether subject is authorized to perform operations to object
@@ -69,7 +69,7 @@ def _check_authorization(
 
 
 def _assert_authorized(
-        subject: base_account, object: Optional[base_account],
+        subject: BaseAccount, object: Optional[BaseAccount],
         admin_level: Authorization = Authorization.ADMIN,
         min_level: Authorization = Authorization.CITIZEN):
     """Raise exception unless subject is authorized to perform
@@ -85,7 +85,7 @@ def _assert_authorized(
         raise UnauthorizedCommandException(subject, object)
 
 
-def _get_account(account_id: Union[AccountId, str], server: Server) -> base_account:
+def _get_account(account_id: Union[AccountId, str], server: Server) -> BaseAccount:
     """Get account from server, unless it doesn't exist, in which case raise"""
     account_id = parse_account_id(account_id)
     if not server.has_account(account_id):
@@ -236,14 +236,14 @@ def add_public_key(
     server.add_public_key(account, key)
 
 
-def list_accounts(author: Union[AccountId, str], server: Server) -> List[base_account]:
+def list_accounts(author: Union[AccountId, str], server: Server) -> List[BaseAccount]:
     """List all accounts"""
     author = _get_account(author, server)
     _assert_authorized(author, None)
     return server.list_accounts()
 
 
-def list_public_accounts(author: Union[AccountId, str], server: Server) -> List[base_account]:
+def list_public_accounts(author: Union[AccountId, str], server: Server) -> List[BaseAccount]:
     """returns a list of all accounts marked as public"""
     return [account for account in server.list_accounts() if account.public]
 
