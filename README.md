@@ -21,15 +21,19 @@ The bot will need credentials to log into Reddit. Summarize them in a JSON file 
   "reddit_username": "USERNAME",
   "reddit_password": "PASSWORD",
   "discord_token": "BOT TOKEN",
+  
   "server_key": "PEM PRIVATE RSA KEY",
+  
   "prefix": ["Prefix 1", "Prefix 2", "etc"],
   "colour": "Hex code for embed colour",
+  "server_type": "'ledger' for a ledger server and 'sql' for a sql server",
   "server_configuration": {
     "url": "An optional SQL database url that will override the other parameters",
     "dialect": "the dialect to use defaults to postgresql",
     "uname": "the username to connect with",
     "psswd": "the password to connect with",
     "db": "the database to connect to",
+    "ledger_path": "if you are using a ledger server you only need to specify a ledger path"
   }
 }
 ```

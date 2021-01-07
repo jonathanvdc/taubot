@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 
-import praw
-import discord
-import json
-import time
 import asyncio
-import traceback
+import json
 import sys
-from aiohttp import web
-from accounting import SQLServer, Authorization, RedditAccountId, DiscordAccountId, AccountId
-from bot_commands import run_command
-from utils import split_into_chunks, discord_postprocess
-from httpapi import RequestServer
+import time
+import traceback
+
+import discord
+import praw
 from Crypto.PublicKey import RSA
+from aiohttp import web
+
+from accounting import SQLServer, LedgerServer, RedditAccountId, DiscordAccountId
+from bot_commands import run_command
+from httpapi import RequestServer
+from utils import split_into_chunks, discord_postprocess
 
 # move this to config?
 prefix = "e!"
@@ -143,9 +145,9 @@ class DiscordMessage(object):
         title = self.title
 
         try:
-            new_embed = discord.Embed(color=int(config["colour"], base=16) if config["colour"] != "main colour" else self.respondee.colour)
+            new_embed = discord.Embed(color=int(config["colour"], base=16))
         except Exception:
-            new_embed = discord.Embed()
+            new_embed = discord.Embed(color=self.respondee.colour)
 
         for i, chunk in enumerate(content[position]):
             title = "(cont'd)" if i != 0 else title
@@ -213,7 +215,8 @@ if __name__ == '__main__':
 
     @discord_client.event
     async def on_reaction_add(reaction, user):
-        assert isinstance(reaction.emoji, str)
+        if not isinstance(reaction.emoji, str):
+            return
         if user == discord_client.user:
             return
 
@@ -279,7 +282,11 @@ if __name__ == '__main__':
 
 
     server_args = config["server_configuration"]
-    with SQLServer(**server_args) as server:
+    try:
+        server_cls = LedgerServer if config["server_type"].lower() == "ledger" else SQLServer
+    except Exception:
+        server_cls = SQLServer
+    with server_cls(**server_args) as server:
         loop = asyncio.get_event_loop()
 
         # Run the Reddit bot.

@@ -46,7 +46,7 @@ def cli(acc, kwargs):
 @click.option("--uname", help="the username to connect with")
 @click.option("--psswd", help="psswd used to connect to the database")
 @click.option("--db")
-@click.option("--db_type")
+@click.option("--dialect")
 def parse(cmd, account, **kwargs):
     acc = parse_account_id(account)
 

@@ -1,6 +1,6 @@
 import time
 import base64
-from accounting import Server, BaseAccount, AccountId, Authorization
+from accounting import Server, Account, AccountId, Authorization
 from accounting import parse_account_id
 from fractions import Fraction
 from typing import Union, Optional, List
@@ -46,7 +46,7 @@ class ProcessCommandException(Exception):
 
 # UTILITY FUNCTIONS (mostly module privates)
 def _check_authorization(
-        subject: BaseAccount, object: BaseAccount,
+        subject: Account, object: Account,
         admin_level: Authorization = Authorization.ADMIN,
         min_level: Authorization = Authorization.CITIZEN) -> bool:
     """Check whether subject is authorized to perform operations to object
@@ -69,7 +69,7 @@ def _check_authorization(
 
 
 def _assert_authorized(
-        subject: BaseAccount, object: Optional[BaseAccount],
+        subject: Account, object: Optional[Account],
         admin_level: Authorization = Authorization.ADMIN,
         min_level: Authorization = Authorization.CITIZEN):
     """Raise exception unless subject is authorized to perform
@@ -85,7 +85,7 @@ def _assert_authorized(
         raise UnauthorizedCommandException(subject, object)
 
 
-def _get_account(account_id: Union[AccountId, str], server: Server) -> BaseAccount:
+def _get_account(account_id: Union[AccountId, str], server: Server) -> Account:
     """Get account from server, unless it doesn't exist, in which case raise"""
     account_id = parse_account_id(account_id)
     if not server.has_account(account_id):
@@ -138,7 +138,7 @@ def transfer(
         author_id: Union[AccountId, str],
         source_id: Union[AccountId, str],
         destination_id: Union[AccountId, str],
-        amount: float, server: Server):
+        amount: Fraction, server: Server):
     """Transfer amount ¤ from source to destination with authorization
        from author on server"""
     author = _get_account(author_id, server)
@@ -204,7 +204,7 @@ def unfreeze_account(
 
 def balance(
         author_id: Union[AccountId, str],
-        account_id: Union[AccountId, str], server: Server) -> float:
+        account_id: Union[AccountId, str], server: Server) -> Fraction:
     """Get the balance of account with authorization from author"""
     author = _get_account(author_id, server)
     account = _get_account(account_id, server)
@@ -215,7 +215,7 @@ def balance(
 
 def get_money_supply(
         author: Union[AccountId, str],
-        server: Server) -> float:
+        server: Server) -> Fraction:
     """Return sum of all account balances"""
     return sum(acc.get_balance() for acc in server.get_accounts())
 
@@ -236,14 +236,14 @@ def add_public_key(
     server.add_public_key(account, key)
 
 
-def list_accounts(author: Union[AccountId, str], server: Server) -> List[BaseAccount]:
+def list_accounts(author: Union[AccountId, str], server: Server) -> List[Account]:
     """List all accounts"""
     author = _get_account(author, server)
     _assert_authorized(author, None)
     return server.list_accounts()
 
 
-def list_public_accounts(author: Union[AccountId, str], server: Server) -> List[BaseAccount]:
+def list_public_accounts(author: Union[AccountId, str], server: Server) -> List[Account]:
     """returns a list of all accounts marked as public"""
     return [account for account in server.list_accounts() if account.public]
 
@@ -251,7 +251,7 @@ def list_public_accounts(author: Union[AccountId, str], server: Server) -> List[
 def print_money(
         author_id: Union[AccountId, str],
         account_id: Union[AccountId, str],
-        amount: float, server: Server):
+        amount: Fraction, server: Server):
     """Print an amount of money into an account,
        with the authorization of author, on server
        """
@@ -268,7 +268,7 @@ def print_money(
 def remove_funds(
         author_id: Union[AccountId, str],
         account_id: Union[AccountId, str],
-        amount: float, server: Server):
+        amount: Fraction, server: Server):
     """Remove funds from an account. Rules applying to
        print_money apply.
        """
@@ -286,7 +286,7 @@ def create_recurring_transfer(
         author_id: Union[AccountId, str],
         sender_id: Union[AccountId, str],
         destination_id: Union[AccountId, str],
-        amount: float, tick_count: int, server: Server):
+        amount: Fraction, tick_count: int, server: Server):
     """Create a recurring transfer."""
     author = _get_account(author_id, server)
     sender = _get_account(sender_id, server)
@@ -394,8 +394,8 @@ def delete_account(
 
 def add_tax_bracket(
         author: Union[AccountId, str],
-        start: float, end: float,
-        rate: float, name: str, server: Server):
+        start: Fraction, end: Fraction,
+        rate: Fraction, name: str, server: Server):
     """Add a tax bracket to a server with authorization from author"""
     author = _get_account(author, server)
     _assert_authorized(author, None)

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import sys
+from decimal import Decimal
+from fractions import Fraction
 from os import path, remove, getenv
 import json
 
@@ -8,7 +10,7 @@ sys.path.append(path.join(path.dirname(
     path.dirname(path.abspath(__file__))), 'src'))
 
 from bot_commands import run_command
-from accounting import RedditAccountId, InMemoryServer, Server, Authorization, SQLServer
+from accounting import RedditAccountId, InMemoryServer, Server, Authorization, SQLServer, LedgerServer
 from typing import Sequence
 from base64 import b64encode
 import unittest
@@ -36,6 +38,14 @@ def create_test_servers() -> Sequence[Server]:
         pass
 
     with SQLServer(url="sqlite:///test.db") as server:  # note that sqlite servers should not be used in deployment
+        yield server
+
+    try:
+        remove("test-ledger.txt")
+    except:
+        pass
+
+    with LedgerServer(ledger_path="test-ledger.txt") as server:
         yield server
 
 
@@ -116,7 +126,7 @@ class CommandTests(unittest.TestCase):
             admin_id = RedditAccountId('admin')
             admin = server.open_account(admin_id)
             server.authorize(admin_id, admin, Authorization.ADMIN)
-            server.print_money(admin_id, admin, float('123.1'))
+            server.print_money(admin_id, admin, Fraction('123.1'))
 
             self.assertIn(
                 '123.1',
@@ -132,12 +142,12 @@ class CommandTests(unittest.TestCase):
             user_id = RedditAccountId('general-kenobi')
             admin = server.open_account(admin_id)
             server.authorize(admin_id, admin, Authorization.ADMIN)
-            server.print_money(admin_id, admin, float('123.1'))
+            server.print_money(admin_id, admin, Fraction('123.1'))
             user = server.open_account(user_id)
-            server.print_money(user_id, user, float('123'))
+            server.print_money(user_id, user, Fraction('123'))
 
             self.assertIn(
-                '246.1',
+                '246 1/10',
                 ''.join(
                     run_command_stream(
                         server,

@@ -4,6 +4,7 @@ from accounting import Server, AccountId, Authorization
 from accounting import parse_account_id
 from typing import Union, Callable
 from fractions import Fraction
+from decimal import Decimal
 
 # Dictionary in which we store all commands
 _commands = {}
@@ -47,7 +48,7 @@ class _Command(object):
 # UI utilities
 
 
-def _mixed(f: float) -> str:
+def _mixed(f: Fraction) -> str:
     f = Fraction(f)
     if f.numerator % f.denominator == 0:
         return str(int(f.numerator / f.denominator))
@@ -65,9 +66,9 @@ def _rounded(f: Fraction) -> str:
 
 
 # Value parsing
-def get_value(string: str) -> float:
-    f = float(Fraction(string))
-    if not (f * 100).is_integer():
+def get_value(string: str) -> Fraction:
+    f = Fraction(string)
+    if not round(f, 2) == f:
         raise ValueError("Too many decimal places of precision")
     return f
 
@@ -186,7 +187,7 @@ _add_command(
 
 def _adm_transfer(
         author: Union[AccountId, str],
-        amount: float,
+        amount: Fraction,
         source: Union[AccountId, str],
         destination: Union[AccountId, str], rest: str,
         server: Server) -> str:
@@ -352,7 +353,7 @@ def _money_supply(
         author: Union[AccountId, str],
         rest: str, server: Server) -> str:
     bal = commands.get_money_supply(author, server)
-    return f"The total money supply is {bal}"
+    return f"The total money supply is {_mixed(bal)}"
 
 
 _add_command(
@@ -405,7 +406,7 @@ _alias('list', 'ls')
 
 def _print_money(
         author: Union[AccountId, str],
-        amount: float, account: Union[AccountId, str],
+        amount: Fraction, account: Union[AccountId, str],
         rest: str, server: Server) -> str:
     try:
         commands.print_money(author, account, amount, server)
@@ -416,7 +417,7 @@ def _print_money(
 
 def _remove_funds(
         author: Union[AccountId, str],
-        amount: float, account: Union[AccountId, str],
+        amount: Fraction, account: Union[AccountId, str],
         rest: str, server: Server) -> str:
     try:
         commands.remove_funds(author, account, amount, server)
@@ -447,7 +448,7 @@ _add_command(
 
 def _create_recurring_transfer(
         author: Union[AccountId, str],
-        amount: float,
+        amount: Fraction,
         destination: Union[AccountId, str],
         tick_count: int, rest: str, server: Server) -> str:
     transfer_id = commands.create_recurring_transfer(
@@ -462,7 +463,7 @@ def _create_recurring_transfer(
 
 def _admin_create_recurring_transfer(
         author: Union[AccountId, str],
-        amount: float,
+        amount: Fraction,
         source: Union[AccountId, str],
         destination: Union[AccountId, str],
         tick_count: int, rest: str, server: Server) -> str:
@@ -635,7 +636,7 @@ _add_command(
 
 def _add_tax_bracket(
         author: Union[AccountId, str],
-        start: float,  end: float, rate: float,
+        start: Fraction,  end: Fraction, rate: Fraction,
         name: str, rest: str, server: Server) -> str:
     end = end if end >= 0 else None
     commands.add_tax_bracket(
