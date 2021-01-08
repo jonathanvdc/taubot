@@ -6,3 +6,6 @@ discord.py
 # optional only needed for cli
 click
 prompt_toolkit
+
+# optional only needed if postgresql is used
+psycopg2-binary

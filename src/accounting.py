@@ -1223,7 +1223,7 @@ class SQLAccount(Base):
 
     uuid = Column(CHAR(36), primary_key=True)
     auth = Column(sqlalchemy.types.Enum(Authorization), server_default='CITIZEN', nullable=True)
-    balance = Column(sqlalchemy.DECIMAL(2), server_default=sqlalchemy.text('0'), nullable=True)
+    balance = Column(sqlalchemy.DECIMAL(), server_default=sqlalchemy.text('0'), nullable=True)
     frozen = Column(Boolean, server_default=sqlalchemy.text('False'), nullable=True)
     public = Column(Boolean, server_default=sqlalchemy.text('False'), nullable=True)
 
@@ -1429,7 +1429,7 @@ class SQLServer(InMemoryServer):
             gov_acc = self.open_account(gov_id)
             self.authorize(gov_id, gov_acc, Authorization.DEVELOPER)
 
-        self.last_tick_timestamp = Decimal(self.read_config("LAST-TICK-TIME", time.time()))
+        self.last_tick_timestamp = float(self.read_config("LAST-TICK-TIME", time.time()))
 
         self.ticks_till_tax = int(self.read_config("TAX-REGULARITY", 28))
 
@@ -1490,6 +1490,7 @@ class SQLServer(InMemoryServer):
             account = SQLAccount(uuid=account_uuid)
             self.session.add(account)
             self.add_account_alias(account, id)
+        self.get_session().commit()
         self.get_session().add(Action(author=account.get_uuid(), action="open", arguments={"account": account.get_uuid()}))
         self.session.commit()
         return account
@@ -1572,12 +1573,12 @@ class SQLServer(InMemoryServer):
         self.session.commit()
 
     def print_money(self, author: AccountId, account: SQLAccount, amount: Fraction):
-        self.get_session().add(Transaction(author=self.get_account(author).get_uuid(), source=None, destination=account.get_uuid(), value=amount))
+        self.get_session().add(Transaction(author=self.get_account(author).get_uuid(), source=None, destination=account.get_uuid(), value=Decimal(amount.numerator/amount.denominator)))
         super().print_money(author, account, amount)
         self.session.commit()
 
     def remove_funds(self, author: AccountId, account: SQLAccount, amount: Fraction):
-        self.get_session().add(Transaction(author=self.get_account(author).get_uuid(), source=None, destination=account.get_uuid(), value=amount))
+        self.get_session().add(Transaction(author=self.get_account(author).get_uuid(), source=None, destination=account.get_uuid(), value=Decimal(amount.numerator/amount.denominator)))
         super().remove_funds(author, account, amount)
         self.session.commit()
 
@@ -1699,7 +1700,7 @@ class SQLServer(InMemoryServer):
 
     def transfer(self, author: AccountId, source: SQLAccount, destination: SQLAccount, amount: Fraction):
         super().transfer(author, source, destination, amount)
-        self.session.add(Transaction(author=self.get_account(author).get_uuid(), source=source.get_uuid(), destination=destination.get_uuid(), value=amount))
+        self.session.add(Transaction(author=self.get_account(author).get_uuid(), source=source.get_uuid(), destination=destination.get_uuid(), value=Decimal(amount.numerator/amount.denominator)))
         self.session.commit()
 
     def add_tax_bracket(self, author: AccountId, start, end, rate, name, tax_uuid=None):

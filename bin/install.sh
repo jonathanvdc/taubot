@@ -10,7 +10,6 @@ echo "setting up the database"
 sudo -u postgres createuser taubot -dP
 
 sudo -u postgres createdb taubot
-sudo -u postgres createdb taubot-tests
 
 echo "installing python dependencies"
 pip3 install -r ../requirements.txt
