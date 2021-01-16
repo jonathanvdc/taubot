@@ -27,5 +27,4 @@ jobs:
     - name: Test with pytest
       run: |
         pip install pytest
-        pytest test/all_tests.py
-
+        DISABLE_SQL_TESTS=TRUE pytest test/all_tests.py

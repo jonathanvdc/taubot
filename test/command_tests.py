@@ -3,7 +3,7 @@
 import sys
 from decimal import Decimal
 from fractions import Fraction
-from os import path, remove, getenv
+from os import path, remove, getenv, environ
 import json
 
 sys.path.append(path.join(path.dirname(
@@ -32,13 +32,15 @@ def run_command_stream(server, *commands):
 
 def create_test_servers() -> Sequence[Server]:
     """Creates a sequence of test servers."""
-    try:
-        remove("test.db")
-    except:
-        pass
 
-    with SQLServer(url="sqlite:///test.db") as server:  # note that sqlite servers should not be used in deployment
-        yield server
+    if (environ.get('SKIP_SQL_TESTS') or '').lower() != 'true':
+        try:
+            remove("test.db")
+        except:
+            pass
+
+        with SQLServer(url="sqlite:///test.db") as server:  # note that sqlite servers should not be used in deployment
+            yield server
 
     try:
         remove("test-ledger.txt")
