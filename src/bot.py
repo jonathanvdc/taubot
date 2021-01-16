@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 
-import praw
-import discord
-import json
-import time
 import asyncio
-import traceback
+import json
 import sys
-from aiohttp import web
-from accounting import LedgerServer, Authorization, RedditAccountId, DiscordAccountId, AccountId
-from bot_commands import run_command
-from utils import split_into_chunks, discord_postprocess
-from httpapi import RequestServer
+import time
+import traceback
+
+import discord
+import praw
 from Crypto.PublicKey import RSA
+from aiohttp import web
+
+from accounting import SQLServer, LedgerServer, RedditAccountId, DiscordAccountId
+from bot_commands import run_command
+from httpapi import RequestServer
+from utils import split_into_chunks, discord_postprocess
 
 # move this to config?
 prefix = "e!"
@@ -145,15 +147,15 @@ class DiscordMessage(object):
         try:
             new_embed = discord.Embed(color=int(config["colour"], base=16))
         except Exception:
-            new_embed = discord.Embed()
+            new_embed = discord.Embed(color=self.respondee.colour)
 
         for i, chunk in enumerate(content[position]):
             title = "(cont'd)" if i != 0 else title
             new_embed.add_field(name=title, value=chunk.decode('utf-8'), inline=False)
         new_embed.set_thumbnail(url=user.avatar_url)
         new_embed.set_footer(
-            text=f"This was sent in response to {user.name}'s message; you can safely disregard it if that's not you.\n"
-                 f"Page {position + 1}/{len(content)}")
+            text=f"This was sent in response to {user.name}'s message; you can safely disregard it if that's not you." +
+                 f"\nPage {position + 1}/{len(content)}" if len(content) != 1 else "")
         return new_embed
 
     async def reload(self):
@@ -213,7 +215,8 @@ if __name__ == '__main__':
 
     @discord_client.event
     async def on_reaction_add(reaction, user):
-        assert isinstance(reaction.emoji, str)
+        if not isinstance(reaction.emoji, str):
+            return
         if user == discord_client.user:
             return
 
@@ -278,8 +281,12 @@ if __name__ == '__main__':
             messages[message_obj.message.id] = message_obj
 
 
-    ledger_path = config['ledger-path'] if 'ledger-path' in config else 'ledger.txt'
-    with LedgerServer(ledger_path) as server:
+    server_args = config["server_configuration"]
+    try:
+        server_cls = LedgerServer if config["server_type"].lower() == "ledger" else SQLServer
+    except Exception:
+        server_cls = SQLServer
+    with server_cls(**server_args) as server:
         loop = asyncio.get_event_loop()
 
         # Run the Reddit bot.
