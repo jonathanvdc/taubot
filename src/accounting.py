@@ -1206,7 +1206,6 @@ class SQLTaxBracket(Base):
 
     def get_tax(self, account):
         bal = account.get_balance()
-        print(type(bal))
         tax_amount = None
         if bal < self.start:
             tax_amount = 0
@@ -1248,7 +1247,7 @@ class SQLAccount(Base):
 
     def set_balance(self, new_balance):
         if isinstance(new_balance, Fraction):
-            self.balance = Decimal(new_balance.numerator/new_balance.denominator)
+            self.balance = Decimal(new_balance.numerator)/Decimal(new_balance.denominator)
             return
 
         self.balance = Decimal(new_balance)
@@ -1272,7 +1271,6 @@ class SQLAccount(Base):
 
     def get_proxies(self):
         """Gets all accounts that have been authorized as proxies for this account."""
-        print(self.proxies)
         return [proxy.proxy_account for proxy in self.proxies]
 
 
@@ -1489,6 +1487,7 @@ class SQLServer(InMemoryServer):
         else:
             account = SQLAccount(uuid=account_uuid)
             self.session.add(account)
+            self.get_session().commit()
             self.add_account_alias(account, id)
         self.get_session().commit()
         self.get_session().add(Action(author=account.get_uuid(), action="open", arguments={"account": account.get_uuid()}))

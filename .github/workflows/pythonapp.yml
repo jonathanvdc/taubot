@@ -27,4 +27,4 @@ jobs:
     - name: Test with pytest
       run: |
         pip install pytest
-        SKIP_SQL_TESTS=TRUE pytest test/all_tests.py
+        pytest test/all_tests.py
