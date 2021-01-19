@@ -3,6 +3,7 @@ import time
 import os.path
 import random
 import base64
+import logging
 
 # sqlalchemy stuff
 from decimal import Decimal
@@ -26,6 +27,7 @@ Base = declarative_base()
 Session = sessionmaker()
 DEFAULT = sqlalchemy.text("default")
 
+logger = logging.getLogger(__name__)
 
 class AccountId(object):
     """A base class for account identifiers."""
@@ -379,6 +381,7 @@ class InMemoryServer(Server):
         account = InMemoryAccount(account_uuid)
         self.accounts[id] = account
         self.inv_accounts[account].append(id)
+        logger.info(f"{id} opened an account with the uuid {account_uuid}")
         return account
 
     def delete_account(self, author: AccountId, id: AccountId):
@@ -395,13 +398,14 @@ class InMemoryServer(Server):
 
             del self.accounts[id]
             del self.inv_accounts[account][0]
-
+            logger.info(f"{id}'s account was deleted by {author}")
             return True
 
     def add_account_alias(self, account: Account, alias_id: AccountId):
         """Associates an additional ID with an account."""
         self.accounts[alias_id] = account
         self.inv_accounts[account].append(alias_id)
+        logger.info(f"{alias_id} is now associated with {account.get_uuid()}")
 
     def get_account(self, id: AccountId) -> Account:
         """Gets the account that matches an ID. Raises an exception if there is no such account."""
@@ -431,14 +435,17 @@ class InMemoryServer(Server):
     def mark_public(self, author: AccountId, account: Account, new_public: bool):
         """Sets account.public to new_public"""
         account.public = new_public
+        logger.info(f"{author} set {self.get_account_id(account)} ({account.get_uuid()})'s public attribute to {new_public}")
 
     def authorize(self, author: AccountId, account: Account, auth_level: Authorization):
         """Makes `author` set `account`'s authorization level to `auth_level`."""
         account.auth = auth_level
+        logger.info(f"{author} set {self.get_account_id(account)} ({account.get_uuid()})'s auth level to {auth_level.name} ")
 
     def set_frozen(self, author: AccountId, account: Account, is_frozen: bool):
         """Freezes or unfreezes `account` on the authority of `author`."""
         account.frozen = is_frozen
+        logger.info(f"{author} set {self.get_account_id(account)} ({account.get_uuid()})'s frozen attribute to {is_frozen}")
 
     def add_public_key(self, account: Account, key):
         """Associates a public key with an account. The key must be an ECC key."""
@@ -447,6 +454,7 @@ class InMemoryServer(Server):
     def add_proxy(self, author: AccountId, account: Account, proxied_account: Account):
         """Makes `account` a proxy for `proxied_account`."""
         proxied_account.proxies.add(account)
+        logger.info(f"{author} let {self.get_account_id(proxied_account)} ({proxied_account.get_uuid()}) proxy for  {self.get_account_id(account)} ({account.get_uuid()})")
 
     def remove_proxy(self, author: AccountId, account: Account, proxied_account: Account) -> bool:
         """Ensures that `account` is not a proxy for `proxied_account`. Returns
@@ -455,15 +463,17 @@ class InMemoryServer(Server):
         prev_in = account in proxied_account.proxies
         if prev_in:
             proxied_account.proxies.remove(account)
-
+        logger.info(f"{author} removed {self.get_account_id(proxied_account)} ({proxied_account.get_uuid()})'s ability to proxy for  {self.get_account_id(account)} ({account.get_uuid()})")
         return not prev_in
 
     def print_money(self, author: AccountId, account: Account, amount: Fraction):
         """Prints `amount` of money on the authority of `author` and deposits it in `account`."""
         account.set_balance(account.get_balance() + amount)
+        logger.info(f"{author} printed {amount} to {self.get_account_id(account)} ({account.get_uuid()})")
 
     def remove_funds(self, author: AccountId, account: Account, amount: Fraction):
         account.set_balance(account.get_balance()-amount)
+        logger.info(f"{author} removed {amount} from {self.get_account_id(account)} ({account.get_uuid()})")
 
     def transfer(self, author: AccountId, source: Account, destination: Account, amount: Fraction):
         """Transfers a particular amount of money from one account on this server to another on
@@ -474,6 +484,7 @@ class InMemoryServer(Server):
 
         source.set_balance(source.get_balance()-amount)
         destination.set_balance(destination.get_balance()+amount)
+        logger.info(f"{author} authorised a transfer of {amount} from {self.get_account_id(source)} ({source.get_uuid()}) to {self.get_account_id(destination)} ({destination.get_uuid()})")
 
     def get_recurring_transfer(self, id: str):
         """Gets a recurring transfer based on its ID."""
@@ -492,10 +503,13 @@ class InMemoryServer(Server):
         rec_transfer = InMemoryRecurringTransfer(author, source, destination, total_amount, tick_count, total_amount,
                                                  transfer_id)
         self.recurring_transfers[rec_transfer.get_id()] = rec_transfer
+        logger.info(
+            f"{author} created a reccuring transfer from {self.get_account_id(source)} ({source.get_uuid()}) to {self.get_account_id(destination)} ({destination.get_uuid()}) of {total_amount} over {tick_count}ticks")
         return rec_transfer
 
     def notify_tick_elapsed(self, tick_timestamp=None):
         """Notifies the server that a tick has elapsed."""
+        logger.info(f"tick at {tick_timestamp if tick_timestamp is not None else time.time()}")
         finished_transfers = set()
         for id in self.recurring_transfers:
             transfer = self.recurring_transfers[id]
@@ -1240,7 +1254,7 @@ class SQLAccount(Base):
     proxies = relationship("Proxy", foreign_keys="Proxy.account")
 
     def __repr__(self):
-        return f"<Account(uuid='{self.uuid}', auth={self.auth}, balance={self.balance}, frozen={self.frozen}, public={self.public}>"
+        return f"<Account(uuid='{self.uuid}')>"
 
     def get_balance(self):
         return Fraction(self.balance)
@@ -1410,16 +1424,18 @@ class SQLServer(InMemoryServer):
         :param dialect: the database type to connect too defaults to 'localhost'
         :param url: optional connection url will override the previous parameters
         """
+
+        logger.info("SQLServer started!")
         url = url \
             if url is not None else f"{dialect}://{uname}{f':{psswd}' if psswd is not None else ''}@{host}/{db}" \
             if dialect != 'sqlite' else f'sqlite:///{db}'
+        logger.debug(f'connecting to the database at: {url}')
         self.engine = sqlalchemy.create_engine(url)
         Session.configure(bind=self.engine)
         self.session = Session()
+        logger.info(f'connected to the database')
         if self.get_session().bind.dialect.name == 'sqlite':
-            print("[WARN] sqlite databases are inefficient and should not be used in production\n"
-                  "[WARN] they may also lead to issues as sqlite does not support the decimal datatype\n"
-                  "[WARN] this means the ORM needs to convert Decimals to floats\n")  # TODO: add proper logging
+            logger.critical("you are using an sqlite database this **will** lead to issues as sqlite databases cannot store decimals and the orm must convert it to a float")
 
         Base.metadata.create_all(self.engine)
         gov_id = RedditAccountId("@government")
@@ -1492,6 +1508,7 @@ class SQLServer(InMemoryServer):
         self.get_session().commit()
         self.get_session().add(Action(author=account.get_uuid(), action="open", arguments={"account": account.get_uuid()}))
         self.session.commit()
+        logger.info(f"{id} opened an account with the uuid {account_uuid}")
         return account
 
     def delete_account(self, author: AccountId, id: AccountId) -> bool:
@@ -1509,12 +1526,14 @@ class SQLServer(InMemoryServer):
             {"balance": None, "auth": None, "frozen": None, "public": None, "deleted": True}
         )
         self.get_session().commit()
+        logger.info(f"{id}'s account was marked as deleted by {author}")
         return True
 
     def add_account_alias(self, account: SQLAccount, alias_id: AccountId):
         self.get_session().add(Action(author=account.get_uuid(), action='add-alias', arguments={"id": str(alias_id)}))
         self.get_session().add(Alias(account=account.get_uuid(), alias_id=str(alias_id)))
         self.get_session().commit()
+        logger.info(f"alias {alias_id} is now associated with {account.get_uuid()}")
 
     def get_account(self, id: AccountId, deleted=False) -> SQLAccount:
         if isinstance(id, SQLAccount):
@@ -1545,7 +1564,7 @@ class SQLServer(InMemoryServer):
         return self.get_account(RedditAccountId("@government"))
 
     def authorize(self, author: AccountId, account: SQLAccount, auth_level: Authorization):
-        account.auth = auth_level
+        super().authorize(author, account, auth_level)
         self.get_session().add(Action(author=self.get_account(author).get_uuid(), action='authorize', arguments={"account": account.get_uuid(), "auth": auth_level.name}))
         self.session.commit()
 
@@ -1609,6 +1628,8 @@ class SQLServer(InMemoryServer):
                 "proxied_account": proxied_account.get_uuid()
             }
         ))
+        logger.info(
+            f"{author} let {self.get_account_id(proxied_account)} ({proxied_account.get_uuid()}) proxy for  {self.get_account_id(account)} ({account.get_uuid()})")
         self.get_session().commit()
 
     def remove_proxy(self, author: AccountId, account: SQLAccount, proxied_account: SQLAccount):
@@ -1623,6 +1644,7 @@ class SQLServer(InMemoryServer):
             }
         ))
         self.get_session().commit()
+        logger.info(f"{author} removed {self.get_account_id(proxied_account)} ({proxied_account.get_uuid()})'s ability to proxy for  {self.get_account_id(account)} ({account.get_uuid()})")
 
     def get_recurring_transfer(self, id: str) -> RecurringTransfer:
         return self.get_session().query(SQLRecurringTransfer).filter_by(uuid=id).one()
@@ -1653,6 +1675,7 @@ class SQLServer(InMemoryServer):
             }
         ))
         self.get_session().commit()
+        logger.info(f"{author} created a recurring transfer from {self.get_account_id(source)} ({source.get_uuid()}) to {self.get_account_id(destination)} ({destination.get_uuid()}) of {total_amount} over {tick_count}ticks")
         return transfer
 
     def notify_tick_elapsed(self, tick_timestamp=None):
@@ -1703,16 +1726,18 @@ class SQLServer(InMemoryServer):
         self.session.commit()
 
     def add_tax_bracket(self, author: AccountId, start, end, rate, name, tax_uuid=None):
-        self.session.add(
-            SQLTaxBracket(
+        b = SQLTaxBracket(
                 uuid=tax_uuid if tax_uuid is not None else str(uuid.uuid4()),
                 start=start,
                 end=end,
                 rate=rate,
                 name=name
             )
+        self.session.add(
+            b
         )
         self.session.commit()
+        logger.info(f"{author} created the tax bracket: {b.__repr__()}")
 
     def get_session(self) -> sqlalchemy.orm.Session:
         return self.session
@@ -1737,11 +1762,14 @@ class SQLServer(InMemoryServer):
                         tuple(tax_bracket.exempt_prefixes)): continue
                 tax_amount = tax_bracket.get_tax(account)
                 if tax_amount != 0:
-                    self.transfer(RedditAccountId('@government'), account, self.get_government_account(), tax_amount)
+                    super().transfer(RedditAccountId('@government'), account, self.get_government_account(), tax_amount)
+                    self.get_session().commit()
+        logger.info(f"{author} forced tax")
         return
 
     def toggle_auto_tax(self, author):
         self.auto_tax = not self.auto_tax
         self.update_config("DO-AUTO-TAX", self.auto_tax)
         self.get_session().add(Action(author=self.get_account(author).get_uuid(), action='toggle-auto-tax', arguments={}))
+        logger.info(f"{author} toggled automated taxation")
         return self.auto_tax
