@@ -1435,7 +1435,7 @@ class SQLServer(InMemoryServer):
         self.session = Session()
         logger.info(f'connected to the database')
         if self.get_session().bind.dialect.name == 'sqlite':
-            logger.critical("you are using an sqlite database this **will** lead to issues as sqlite databases cannot store decimals and the orm must convert it to a float")
+            logger.warning("you are using an sqlite database this **will** lead to issues as sqlite databases cannot store decimals and the orm must convert it to a float")
 
         Base.metadata.create_all(self.engine)
         gov_id = RedditAccountId("@government")
