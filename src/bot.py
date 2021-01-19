@@ -25,7 +25,16 @@ from utils import split_into_chunks, discord_postprocess
 # move this to config?
 prefix = "e!"
 messages = {}
+fh = logging.FileHandler(f'./logs/{datetime.datetime.now()}.log'.replace(' ', '-'))
+fh.setLevel(logging.DEBUG)
 
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+
+formatter = logging.Formatter('[%(asctime)s] [%(name)s] [%(levelname)s] : %(message)s')
+
+ch.setFormatter(formatter)
+fh.setFormatter(formatter)
 
 class DiscordWebhookHandler(logging.Handler):
     _colour_map = {
@@ -52,36 +61,17 @@ class DiscordWebhookHandler(logging.Handler):
         self._webhook.send(embed=embed)
 
 
-try:
-    os.mkdir('./logs')
-except FileExistsError:
-    pass
+def add_logger(name=None):
 
-dl = logging.getLogger(discord.__name__)
-sl = logging.getLogger(accounting.__name__)
-sl.setLevel(logging.DEBUG)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-fh = logging.FileHandler(f'./logs/{datetime.datetime.now()}.log'.replace(' ', '-'))
-fh.setLevel(logging.DEBUG)
-
-ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
-
-formatter = logging.Formatter('[%(asctime)s] [%(name)s] [%(levelname)s] : %(message)s')
-
-ch.setFormatter(formatter)
-fh.setFormatter(formatter)
-
-sl.addHandler(ch)
-sl.addHandler(fh)
-
-dl.addHandler(ch)
-dl.addHandler(fh)
-
-logger.addHandler(ch)
-logger.addHandler(fh)
+    try:
+        os.mkdir('./logs')
+    except FileExistsError:
+        pass
+    l = logging.getLogger(name)
+    l.setLevel(logging.DEBUG)
+    l.addHandler(ch)
+    l.addHandler(fh)
+    return l
 
 
 def read_config():
@@ -237,6 +227,9 @@ class DiscordMessage(object):
 
 
 if __name__ == '__main__':
+    add_logger(discord.__name__)
+    add_logger(accounting.__name__)
+    logger = add_logger(__name__)
     logger.info("launching")
 
     required_reddit_keys = [
