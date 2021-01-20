@@ -7,10 +7,16 @@ import time
 import traceback
 
 import discord
+from discord import Webhook, RequestsWebhookAdapter
 import praw
 from Crypto.PublicKey import RSA
 from aiohttp import web
 
+import os
+import logging
+import datetime
+import accounting
+from typing import Union
 from accounting import SQLServer, LedgerServer, RedditAccountId, DiscordAccountId
 from bot_commands import run_command
 from httpapi import RequestServer
@@ -19,6 +25,54 @@ from utils import split_into_chunks, discord_postprocess
 # move this to config?
 prefix = "e!"
 messages = {}
+try:
+    os.mkdir('./logs')
+except FileExistsError:
+    pass 
+
+fh = logging.FileHandler(f'./logs/{datetime.datetime.now()}.log'.replace(' ', '-'))
+fh.setLevel(logging.DEBUG)
+
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+
+formatter = logging.Formatter('[%(asctime)s] [%(name)s] [%(levelname)s] : %(message)s')
+
+ch.setFormatter(formatter)
+fh.setFormatter(formatter)
+
+class DiscordWebhookHandler(logging.Handler):
+    _colour_map = {
+        logging.DEBUG: discord.Colour.dark_green(),
+        logging.WARN: discord.Colour.dark_orange(),
+        logging.INFO: discord.Colour.green(),
+        logging.CRITICAL: discord.Colour.dark_red(),
+        logging.ERROR: discord.Colour.dark_red(),
+        logging.FATAL: discord.Colour.dark_red(),
+        logging.NOTSET: discord.Colour.blue()
+    }
+
+    def __init__(self, webhook_url, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._webhook = Webhook.from_url(webhook_url, adapter=RequestsWebhookAdapter())
+
+    def emit(self, record: logging.LogRecord):
+        try:
+            embed = discord.Embed(colour=self._colour_map[record.levelno])
+        except:
+            embed = discord.Embed(colour=self._colour_map[logging.NOTSET])
+
+        embed.add_field(name=record.name, value=discord_postprocess(record.message), inline=False)
+        self._webhook.send(embed=embed)
+
+
+def add_logger(name=None):
+
+    l = logging.getLogger(name)
+    l.setLevel(logging.DEBUG)
+    l.addHandler(ch)
+    l.addHandler(fh)
+    return l
 
 
 def read_config():
@@ -120,12 +174,7 @@ async def comment_loop(reddit, server):
 
 
 def print_bad(item):
-    # TODO: make less sloppy
-    print(
-        f'\n[WARN] the necessary keys to create the {item} were not found or were invalid degrading to running without {item} functionality')
-    print(
-        f'[WARN] if you wish to run with {item} functionality fill the bot-config.json with the necessary keys found here: ')
-    print(f'[WARN] https://github.com/jonathanvdc/taubot/blob/master/README.md, or in the README attached')
+    logger.debug(f"the key for {item} was not found setting it to the default values")
 
 
 class DiscordMessage(object):
@@ -179,7 +228,10 @@ class DiscordMessage(object):
 
 
 if __name__ == '__main__':
-    print("[Main] Launching")
+    add_logger(discord.__name__)
+    add_logger(accounting.__name__)
+    logger = add_logger(__name__)
+    logger.info("launching")
 
     required_reddit_keys = [
         'reddit_client_id',
@@ -196,14 +248,14 @@ if __name__ == '__main__':
     if set(required_reddit_keys).issubset(set(config.keys())):
         reddit = create_reddit(config)
     else:
-        print_bad("Reddit Bot")
+        print_bad("Reddit_Bot")
         reddit = None
     discord_client = discord.Client()
 
     try:
         max_chunks = int(config["max_chunks"])
     except Exception as e:
-        print_bad("max chunks")
+        print_bad("max_chunks")
         max_chunks = 1
 
     try:
@@ -211,6 +263,24 @@ if __name__ == '__main__':
     except Exception as e:
         print_bad("prefix")
         config_prefix = None
+
+    try:
+        def set_up_webhook(url):
+            wh = DiscordWebhookHandler(url)
+            wh.setLevel(logging.INFO)
+            wh.setFormatter(formatter)
+            logger.addHandler(wh)
+            logging.getLogger(accounting.__name__).addHandler(wh)
+
+
+        url = config["logging_webhook"]
+        if isinstance(url, (list, tuple)):
+            for i in url:
+                set_up_webhook(url)
+        else:
+            set_up_webhook(url)
+    except:
+        print_bad('logging_webhook')
 
 
     @discord_client.event

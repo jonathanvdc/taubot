@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 
 import sys
-from decimal import Decimal
 from fractions import Fraction
-from os import path, remove, getenv, environ
-import json
+from os import path, remove, environ
 
 sys.path.append(path.join(path.dirname(
     path.dirname(path.abspath(__file__))), 'src'))
