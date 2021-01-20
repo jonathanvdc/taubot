@@ -25,6 +25,11 @@ from utils import split_into_chunks, discord_postprocess
 # move this to config?
 prefix = "e!"
 messages = {}
+try:
+    os.mkdir('./logs')
+except FileExistsError:
+    pass 
+
 fh = logging.FileHandler(f'./logs/{datetime.datetime.now()}.log'.replace(' ', '-'))
 fh.setLevel(logging.DEBUG)
 
@@ -63,10 +68,6 @@ class DiscordWebhookHandler(logging.Handler):
 
 def add_logger(name=None):
 
-    try:
-        os.mkdir('./logs')
-    except FileExistsError:
-        pass
     l = logging.getLogger(name)
     l.setLevel(logging.DEBUG)
     l.addHandler(ch)
