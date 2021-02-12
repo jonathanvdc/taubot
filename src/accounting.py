@@ -1438,10 +1438,10 @@ class SQLServer(InMemoryServer):
             logger.warning("you are using an sqlite database this **will** lead to issues as sqlite databases cannot store decimals and the orm must convert it to a float")
 
         Base.metadata.create_all(self.engine)
-        gov_id = RedditAccountId("@government")
-        if not self.has_account(gov_id):
-            gov_acc = self.open_account(gov_id)
-            self.authorize(gov_id, gov_acc, Authorization.DEVELOPER)
+        #gov_id = RedditAccountId("@government")
+        #if not self.has_account(gov_id):
+        #    gov_acc = self.open_account(gov_id)
+        #    self.authorize(gov_id, gov_acc, Authorization.DEVELOPER)
 
         self.last_tick_timestamp = float(self.read_config("LAST-TICK-TIME", time.time()))
 
@@ -1557,8 +1557,10 @@ class SQLServer(InMemoryServer):
         try:
             self.get_account(id, deleted)
             return True
-        except:
-            return False
+        except Exception as e:
+            if str(e) == "Account does not exist":
+                return False
+            raise e
 
     def get_government_account(self) -> SQLAccount:
         return self.get_account(RedditAccountId("@government"))
