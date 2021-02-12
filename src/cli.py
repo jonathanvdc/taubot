@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import click
-from accounting import SQLServer
-from accounting import parse_account_id
+from accounting import SQLServer, parse_account_id
 from bot_commands import run_command
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit import PromptSession

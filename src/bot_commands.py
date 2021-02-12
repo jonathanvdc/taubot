@@ -668,7 +668,7 @@ _add_command(
         'name': (str, "Name of the bracket to delete")
     },
     _remove_tax_bracket,
-    "Removes a tax bracker"
+    "Removes a tax bracket"
 )
 
 
@@ -683,7 +683,20 @@ _add_command(
     'force-tax',
     {},
     _force_tax,
-    "Manually apply tax brakcets"
+    "Manually apply tax brackets"
+)
+
+def _hypothetical_tax(
+        author: Union[AccountId, str],
+        rest: str, server: Server) -> str:
+    return f"Hypothetical tax revenue: {commands.hypothetical_tax(author, server)}"
+
+
+_add_command(
+    'hypothetical-tax',
+    {},
+    _hypothetical_tax,
+    "Applies a hypothetical round of taxation."
 )
 
 

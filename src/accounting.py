@@ -828,19 +828,38 @@ class TaxMan:
 
         return value
 
-    def tax(self):
-        self.ticks_till_tax_tmp = self.ticks_till_tax
-        i = 0
-        for tax_bracket in self.tax_brackets:
-            for account in self.server.list_accounts():
-                i += 1
+    def get_account_tax(self, account: Account):
+        """Computes the total amount that an account would owe
+           in a hypothetical round of taxation."""
+        return sum(
+            bracket.get_tax(account)
+            for bracket in self.tax_brackets.values()
+            if not str(self.server.get_account_id(account)).startswith(
+                tuple(bracket.exempt_prefixes)))
 
-                if str(self.server.get_account_id(account)).startswith(
-                    tuple(self.tax_brackets[tax_bracket].exempt_prefixes)): continue
-                tax_amount = self.tax_brackets[tax_bracket].get_tax(account)
-                if tax_amount != 0:
-                    self.server.transfer('@government', account, self.server.get_government_account(), tax_amount)
-        return
+    def tax(self):
+        """Taxes all eligible accounts. Returns the total revenue."""
+        self.ticks_till_tax_tmp = self.ticks_till_tax
+
+        # Compute taxes for every account and make a transfer
+        # if necessary.
+        total_revenue = 0
+        for account in self.server.list_accounts():
+            amount_due = self.get_account_tax(account)
+            if amount_due != 0:
+                self.server.transfer('@government', account, self.server.get_government_account(), amount_due)
+                total_revenue += amount_due
+
+        return total_revenue
+
+    def hypothetical_tax(self):
+        """Performs a hypothetical round of taxation. This method
+           returns the total tax revenue if taxes were to be levied
+           right now. Since the round of hypothetical, no balances
+           are altered."""
+        return sum(
+            self.get_account_tax(account)
+            for account in self.server.list_accounts())
 
 
 class LedgerServer(InMemoryServer):
@@ -1753,17 +1772,9 @@ class SQLServer(InMemoryServer):
 
     def force_tax(self, author):
         self.get_session().add(Action(author=self.get_account(author).get_uuid(), action='force-tax', arguments={}))
-
         self.ticks_till_tax_tmp = self.ticks_till_tax
-
-        for tax_bracket in self.get_tax_brackets():
-            for account in self.get_accounts():
-                if str(self.get_account_id(account)).startswith(
-                        tuple(tax_bracket.exempt_prefixes)): continue
-                tax_amount = tax_bracket.get_tax(account)
-                if tax_amount != 0:
-                    super().transfer(RedditAccountId('@government'), account, self.get_government_account(), tax_amount)
-                    self.get_session().commit()
+        TaxMan(self).tax()
+        self.get_session().commit()
         logger.info(f"{author} forced tax")
         return
 

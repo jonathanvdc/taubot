@@ -1,6 +1,6 @@
 import time
 import base64
-from accounting import Server, Account, AccountId, Authorization
+from accounting import Server, Account, AccountId, Authorization, TaxMan
 from accounting import parse_account_id
 from fractions import Fraction
 from typing import Union, Optional, List
@@ -417,6 +417,10 @@ def force_tax(author: Union[AccountId, str], server: Server):
     _assert_authorized(author, None)
     server.force_tax(author)
 
+def hypothetical_tax(author: Union[AccountId, str], server: Server):
+    author = _get_account(author, server)
+    _assert_authorized(author, None)
+    return TaxMan(server).hypothetical_tax()
 
 def auto_tax(author: Union[AccountId, str], server: Server) -> bool:
     """Toggle automatic taxation"""
