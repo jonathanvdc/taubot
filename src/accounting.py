@@ -1430,7 +1430,7 @@ class SQLRecurringTransfer(Base):
 class SQLServer(InMemoryServer):
 
     def __init__(self, psswd: str = None, uname: str = "taubot", db: str = "taubot", host: str = "localhost",
-                 dialect: str = "postgresql", url: str = None):
+                 dialect: str = "postgresql", url: str = None, create_government_account: bool = True):
         """
         A server object that uses a SQL database for persistence rather than the Ledger, this means faster start up times
         but has the disadvantage of being harder to audit, all SQL databases *should* be supported but was designed
@@ -1457,10 +1457,12 @@ class SQLServer(InMemoryServer):
             logger.warning("you are using an sqlite database this **will** lead to issues as sqlite databases cannot store decimals and the orm must convert it to a float")
 
         Base.metadata.create_all(self.engine)
-        #gov_id = RedditAccountId("@government")
-        #if not self.has_account(gov_id):
-        #    gov_acc = self.open_account(gov_id)
-        #    self.authorize(gov_id, gov_acc, Authorization.DEVELOPER)
+
+        if create_government_account:
+            gov_id = RedditAccountId("@government")
+            if not self.has_account(gov_id):
+                gov_acc = self.open_account(gov_id)
+                self.authorize(gov_id, gov_acc, Authorization.DEVELOPER)
 
         self.last_tick_timestamp = float(self.read_config("LAST-TICK-TIME", time.time()))
 
