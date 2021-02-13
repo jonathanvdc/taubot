@@ -1777,7 +1777,11 @@ class SQLServer(InMemoryServer):
     def force_tax(self, author):
         self.get_session().add(Action(author=self.get_account(author).get_uuid(), action='force-tax', arguments={}))
         self.ticks_till_tax_tmp = self.ticks_till_tax
-        TaxMan(self).tax()
+        tax_man = TaxMan(self)
+        for bracket in self.get_tax_brackets():
+            tax_man.tax_brackets[bracket.name] = bracket
+
+        tax_man.tax()
         self.get_session().commit()
         logger.info(f"{author} forced tax")
         return
