@@ -31,6 +31,14 @@ def run_command_stream(server, *commands):
 def create_test_servers() -> Sequence[Server]:
     """Creates a sequence of test servers."""
 
+    try:
+        remove("test-ledger.txt")
+    except:
+        pass
+
+    with LedgerServer(ledger_path="test-ledger.txt") as server:
+        yield server
+
     if (environ.get('SKIP_SQL_TESTS') or '').lower() != 'true':
         try:
             remove("test.db")
@@ -39,14 +47,6 @@ def create_test_servers() -> Sequence[Server]:
 
         with SQLServer(url="sqlite:///test.db") as server:  # note that sqlite servers should not be used in deployment
             yield server
-
-    try:
-        remove("test-ledger.txt")
-    except:
-        pass
-
-    with LedgerServer(ledger_path="test-ledger.txt") as server:
-        yield server
 
 
 class ServerTests(unittest.TestCase):
@@ -440,8 +440,8 @@ class CommandTests(unittest.TestCase):
             run_command_stream(server, (admin_id, 'add-tax-bracket 1000 2000 50 Tax50%'))
 
             run_command_stream(server, (admin_id, 'force-tax'))
-            self.assertEqual(account.get_balance(), 1425)
-            self.assertEqual(server.get_government_account().get_balance(), 575)
+            self.assertEqual(account.get_balance(), 1350)
+            self.assertEqual(server.get_government_account().get_balance(), 650)
 
     def test_auto_tax(self):
         for server in create_test_servers():
@@ -457,8 +457,8 @@ class CommandTests(unittest.TestCase):
             run_command_stream(server, (admin_id, 'auto-tax'))
             for i in range(100):
                 server.notify_tick_elapsed()
-            self.assertEqual(account.get_balance(), 987)
-            self.assertEqual(server.get_government_account().get_balance(), 1013)
+            self.assertEqual(account.get_balance(), 863)
+            self.assertEqual(server.get_government_account().get_balance(), 1137)
 
     def test_delete_account(self):
         for server in create_test_servers():
