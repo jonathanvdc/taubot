@@ -1,0 +1,9 @@
+# IDE cruft.
+.vs/
+
+# Compiler cruft.
+bin/
+obj/
+
+.fake
+.ionide
