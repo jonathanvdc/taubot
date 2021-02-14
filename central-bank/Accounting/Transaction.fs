@@ -1,4 +1,4 @@
-namespace CentralBank.Accounting
+namespace Accounting
 
 /// A unique account identifier.
 type AccountId = string

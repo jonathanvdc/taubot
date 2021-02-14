@@ -1,6 +1,6 @@
-module CentralBank.Accounting.InMemoryTransactionProcessor
+module Accounting.InMemoryTransactionProcessor
 
-open CentralBank.Accounting.Helpers
+open Accounting.Helpers
 
 type AccountData =
     { Balance: CurrencyAmount
@@ -83,6 +83,13 @@ let authenticate transaction state: bool =
            |> isInScopeForAny transaction.Action
        | None -> true
 
+/// An initial, empty state for an in-memory transaction processor.
+let emptyState = {
+    Accounts = Map.empty;
+    History = []
+}
+
+/// Processes a transaction.
 let apply (state: State) (transaction: Transaction): Result<State * TransactionResult, TransactionError> =
     match validateAction transaction.Action, authenticate transaction state, getAccount transaction.Account state with
     | Error e, _, _ -> Error e

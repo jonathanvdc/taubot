@@ -1,4 +1,4 @@
-module CentralBank.Accounting.Helpers
+module Accounting.Helpers
 
 /// Constructs the proxy chain that authorizes a transaction. A proxy chain
 /// is a list of account IDs where successive elements in the chain must
