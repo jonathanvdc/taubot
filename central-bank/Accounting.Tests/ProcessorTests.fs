@@ -45,17 +45,23 @@ type ProcessorTests() =
         |> this.ExpectSuccess
         |> fst
 
+    member this.ApplyPrimeMover action state =
+        this.ApplyAction(this.CreatePrimeMoverTransaction action) state
+
+    member this.QueryPrimeMover action state =
+        this.ApplyQuery(this.CreatePrimeMoverTransaction action) state
+
     [<TestMethod>]
     member this.TestQueryInitialBalance() =
         this.InitialState
-        |> this.ApplyQuery(this.CreatePrimeMoverTransaction QueryBalanceAction)
+        |> this.QueryPrimeMover(QueryBalanceAction)
         |> (=) (BalanceResult 0m)
         |> Assert.IsTrue
 
     [<TestMethod>]
     member this.TestOpenAccount() =
         this.InitialState
-        |> this.ApplyAction(this.CreatePrimeMoverTransaction (OpenAccountAction "user"))
+        |> this.ApplyPrimeMover(OpenAccountAction "user")
         |> this.ApplyQuery(this.CreateAdminTransaction QueryBalanceAction "user")
         |> (=) (BalanceResult 0m)
         |> Assert.IsTrue
@@ -63,7 +69,17 @@ type ProcessorTests() =
     [<TestMethod>]
     member this.TestMint() =
         this.InitialState
-        |> this.ApplyAction(this.CreatePrimeMoverTransaction (MintAction 10m))
+        |> this.ApplyPrimeMover(MintAction 10m)
         |> this.ApplyQuery(this.CreatePrimeMoverTransaction QueryBalanceAction)
+        |> (=) (BalanceResult 10m)
+        |> Assert.IsTrue
+
+    [<TestMethod>]
+    member this.TestOpenMintAndTransfer() =
+        this.InitialState
+        |> this.ApplyPrimeMover(OpenAccountAction "user")
+        |> this.ApplyPrimeMover(MintAction 10m)
+        |> this.ApplyPrimeMover(TransferAction(10m, "user"))
+        |> this.ApplyQuery(this.CreateAdminTransaction QueryBalanceAction "user")
         |> (=) (BalanceResult 10m)
         |> Assert.IsTrue
