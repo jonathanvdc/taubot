@@ -84,32 +84,30 @@ let authenticate transaction state: bool =
        | None -> true
 
 let apply (state: State) (transaction: Transaction): Result<State * TransactionResult, TransactionError> =
-    match validateAction transaction.Action, authenticate transaction state with
-    | Error e, _ -> Error e
-    | Ok _, false -> Error UnauthorizedError
-    | Ok _, true ->
+    match validateAction transaction.Action, authenticate transaction state, getAccount transaction.Account state with
+    | Error e, _, _ -> Error e
+    | Ok _, false, _ -> Error UnauthorizedError
+    | Ok _, true, None -> Error UnauthorizedError
+    | Ok _, true, Some srcAcc ->
         match transaction.Action with
+        | QueryBalanceAction -> Ok(state, BalanceResult srcAcc.Balance)
+
         | MintAction amount ->
-            let srcId = transaction.Account
+            let newState =
+                state
+                |> setAccount
+                    transaction.Account
+                    { srcAcc with
+                          Balance = srcAcc.Balance + amount }
+                |> addTransaction transaction
 
-            match getAccount srcId state with
-            | Some srcAcc ->
-                let newState =
-                    state
-                    |> setAccount
-                        srcId
-                        { srcAcc with
-                              Balance = srcAcc.Balance + amount }
-                    |> addTransaction transaction
-
-                Ok(newState, SuccessfulResult)
-            | None -> Error UnauthorizedError
+            Ok(newState, SuccessfulResult)
 
         | TransferAction (amount, destId) ->
             let srcId = transaction.Account
 
-            match getAccount srcId state, getAccount destId state with
-            | Some srcAcc, Some destAcc ->
+            match getAccount destId state with
+            | Some destAcc ->
                 let newBalance = srcAcc.Balance - amount
 
                 if newBalance < 0.0m then
@@ -125,5 +123,4 @@ let apply (state: State) (transaction: Transaction): Result<State * TransactionR
                         |> addTransaction transaction
 
                     Ok(newState, SuccessfulResult)
-            | None, _ -> Error UnauthorizedError
-            | _, None -> Error DestinationDoesNotExistError
+            | None -> Error DestinationDoesNotExistError

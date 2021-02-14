@@ -13,6 +13,9 @@ type AccountAction =
     /// Generates an amount and adds it to the account balance.
     | MintAction of amount: CurrencyAmount
 
+    /// An action that queries an account's balance.
+    | QueryBalanceAction
+
 /// A unique access token identifier.
 type AccessTokenId = string
 
@@ -22,6 +25,9 @@ type AccessTokenId = string
 type AccessScope =
     /// Allows for any action to be performed.
     | UnboundedScope
+
+    /// Allows for the account's balance to be queried.
+    | QueryBalanceScope
 
     /// Allows transfers.
     | TransferScope
