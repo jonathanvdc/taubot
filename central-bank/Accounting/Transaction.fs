@@ -16,6 +16,9 @@ type AccountAction =
     /// An action that queries an account's balance.
     | QueryBalanceAction
 
+    /// An action that opens a new account.
+    | OpenAccountAction of accountId: AccountId
+
 /// A unique access token identifier.
 type AccessTokenId = string
 
@@ -34,6 +37,9 @@ type AccessScope =
 
     /// Allows for the minting of new currency.
     | MintScope
+
+    /// Allows for the opening of new accounts.
+    | OpenAccountScope
 
     /// Allows an account to perform actions as another account
     /// without proxy access. Admin accounts cannot perform types
@@ -82,6 +88,9 @@ type TransactionResult =
     /// Produces the balance of an account.
     | BalanceResult of amount: CurrencyAmount
 
+    /// Returns an access token.
+    | AccessTokenResult of tokenId: AccessTokenId
+
 type TransactionError =
     /// Indicates the the transaction was inadequately authorized.
     | UnauthorizedError
@@ -96,6 +105,10 @@ type TransactionError =
     /// Indicates that a transaction specified an invalid amount.
     | InvalidAmountError
 
+    /// A response to an account creation request, indicating that
+    /// the account already exists.
+    | AccountAlreadyExistsError
+
 /// Applies a transaction. If the transaction can be applied,
 /// a result is returned; otherwise, an error is returned.
-type TransactionProcessor<'state> = 'state -> Transaction -> Result<'state * TransactionResult, TransactionError>
+type TransactionProcessor<'state> = Transaction -> 'state -> Result<'state * TransactionResult, TransactionError>

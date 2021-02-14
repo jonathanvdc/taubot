@@ -40,6 +40,7 @@ let isInScope action scope =
     | TransferAction _, TransferScope -> true
     | MintAction _, MintScope -> true
     | QueryBalanceAction, QueryBalanceScope -> true
+    | OpenAccountAction _, OpenAccountScope -> true
     | _, _ -> false
 
 /// Tests if an action is within one of a sequence of access scopes' abilities

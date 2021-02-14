@@ -1,5 +1,6 @@
 module Accounting.InMemoryTransactionProcessor
 
+open System
 open Accounting.Helpers
 
 type AccountData =
@@ -15,7 +16,13 @@ type State =
 
       /// A list of all previously applied non-query transactions,
       /// in reverse order (latest transaction first).
-      History: Transaction list }
+      History: Transaction list
+
+      /// The default set of privileges for an account.
+      DefaultPrivileges: AccessScope Set
+
+      /// The random number generator to use.
+      Rng: Random }
 
 /// Gets an account's associated data, if it exists.
 let getAccount accountId state = Map.tryFind accountId state.Accounts
@@ -51,7 +58,9 @@ let hasPrivilege privilege accountId state =
     |> Set.contains privilege
 
 /// Checks if an account is an admin account.
-let isAdmin = hasPrivilege AdminScope
+let isAdmin accountId state =
+    hasPrivilege AdminScope accountId state
+    || hasPrivilege UnboundedScope accountId state
 
 /// Ensures that a proxy chain checks out.
 let rec checkProxyChain (state: State) (chain: AccountId list) =
@@ -72,7 +81,7 @@ let authenticate transaction state: bool =
     checkProxyChain state (proxyChain transaction)
     // Check that the authorizer is an admin if the transaction is admin-authorized.
     && (not (isAdminAuthorized transaction)
-        || hasPrivilege AdminScope (finalAuthorizer transaction) state)
+        || isAdmin (finalAuthorizer transaction) state)
     // Check that the account to which the transaction applies can perform
     // the transaction.
     && isInScopeForAny transaction.Action (privileges transaction.Account state)
@@ -84,13 +93,23 @@ let authenticate transaction state: bool =
        | None -> true
 
 /// An initial, empty state for an in-memory transaction processor.
-let emptyState = {
-    Accounts = Map.empty;
-    History = []
-}
+let emptyState =
+    { Accounts = Map.empty
+      History = []
+      DefaultPrivileges =
+          Set.ofList [ QueryBalanceScope
+                       TransferScope ]
+      Rng = Random() }
+
+/// Randomly generates a new token ID.
+let generateTokenId state =
+    // Generate 40 random bytes and base64-encode them.
+    let buffer = Array.create 40 1uy
+    state.Rng.NextBytes(buffer)
+    Convert.ToBase64String buffer
 
 /// Processes a transaction.
-let apply (state: State) (transaction: Transaction): Result<State * TransactionResult, TransactionError> =
+let apply (transaction: Transaction) (state: State): Result<State * TransactionResult, TransactionError> =
     match validateAction transaction.Action, authenticate transaction state, getAccount transaction.Account state with
     | Error e, _, _ -> Error e
     | Ok _, false, _ -> Error UnauthorizedError
@@ -98,6 +117,31 @@ let apply (state: State) (transaction: Transaction): Result<State * TransactionR
     | Ok _, true, Some srcAcc ->
         match transaction.Action with
         | QueryBalanceAction -> Ok(state, BalanceResult srcAcc.Balance)
+
+        | OpenAccountAction newId ->
+            if accountExists newId state then
+                Error AccountAlreadyExistsError
+            else
+                // In addition to actually opening an account, we will generate
+                // a token that can be used to further configure the account.
+                // This token will have unbounded scope. The account opener is
+                // assumed to be a trusted third party (and needs special
+                // permission to open accounts).
+                let tokenId = generateTokenId state
+
+                let newState =
+                    state
+                    |> setAccount
+                        newId
+                        { Balance = 0m
+                          Privileges = state.DefaultPrivileges
+                          ProxyAccess = Set.empty
+                          Tokens =
+                              Map.empty
+                              |> Map.add tokenId (Set.singleton UnboundedScope) }
+                    |> addTransaction transaction
+
+                Ok(newState, AccessTokenResult tokenId)
 
         | MintAction amount ->
             let newState =
