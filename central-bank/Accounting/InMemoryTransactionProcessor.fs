@@ -3,10 +3,10 @@ module CentralBank.Accounting.InMemoryTransactionProcessor
 open CentralBank.Accounting.Helpers
 
 type AccountData =
-    { Balance: decimal
+    { Balance: CurrencyAmount
       ProxyAccess: AccountId Set
-      IsAdmin: bool
-      Tokens: Map<AccessTokenId, AccessTokenScope list> }
+      Privileges: AccessScope Set
+      Tokens: Map<AccessTokenId, AccessScope Set> }
 
 type State =
     {
@@ -33,11 +33,25 @@ let addTransaction transaction state =
     { state with
           History = transaction :: state.History }
 
-/// Checks if an account is an admin account.
-let isAdmin accountId state =
+let privileges accountId state =
     match getAccount accountId state with
-    | Some accountData -> accountData.IsAdmin
-    | None -> false
+    | Some accountData -> accountData.Privileges
+    | None -> Set.empty
+
+let tokenScopes tokenId accountId state =
+    match getAccount accountId state with
+    | Some accountData ->
+        match Map.tryFind tokenId accountData.Tokens with
+        | Some result -> result
+        | None -> Set.empty
+    | None -> Set.empty
+
+let hasPrivilege privilege accountId state =
+    privileges accountId state
+    |> Set.contains privilege
+
+/// Checks if an account is an admin account.
+let isAdmin = hasPrivilege AdminScope
 
 /// Ensures that a proxy chain checks out.
 let rec checkProxyChain (state: State) (chain: AccountId list) =
@@ -51,33 +65,35 @@ let rec checkProxyChain (state: State) (chain: AccountId list) =
     | [ x ] -> accountExists x state
     | [] -> false
 
-/// Ensures that the final authorizer is authorized to perform
-/// the transaction. This boils down to checking admin privileges.
-let rec checkFinalAuthorizer requiresAdmin state accountId authorization =
-    match authorization with
-    | SelfAuthorized -> not requiresAdmin || isAdmin accountId state
-    | AdminAuthorized adminId -> isAdmin adminId state
-    | ProxyAuthorized (_, tail) -> checkFinalAuthorizer requiresAdmin state accountId tail
-
 /// Authenticates a transaction. Returns a Boolean value that indicates whether
 /// or not the transaction could be authenticated.
-let authenticate (state: State) (transaction: Transaction): bool =
-    checkProxyChain state (proxyChain transaction.Authorization transaction.Account)
-    && checkFinalAuthorizer false state transaction.Account transaction.Authorization
+let authenticate transaction state: bool =
+    // Check that the proxy chain is okay.
+    checkProxyChain state (proxyChain transaction)
+    // Check that the authorizer is an admin if the transaction is admin-authorized.
+    && (not (isAdminAuthorized transaction)
+        || hasPrivilege AdminScope (finalAuthorizer transaction) state)
+    // Check that the account to which the transaction applies can perform
+    // the transaction.
+    && isInScopeForAny transaction.Action (privileges transaction.Account state)
+    // Check that the access token is up to scratch.
+    && match transaction.AccessToken with
+       | Some token ->
+           tokenScopes token (finalAuthorizer transaction) state
+           |> isInScopeForAny transaction.Action
+       | None -> true
 
 let apply (state: State) (transaction: Transaction): Result<State * TransactionResult, TransactionError> =
-    if not (authenticate state transaction) then
-        Error UnauthorizedError
-    else
+    match validateAction transaction.Action, authenticate transaction state with
+    | Error e, _ -> Error e
+    | Ok _, false -> Error UnauthorizedError
+    | Ok _, true ->
         match transaction.Action with
         | MintAction amount ->
             let srcId = transaction.Account
 
-            let finalAuth =
-                checkFinalAuthorizer true state srcId transaction.Authorization
-
-            match finalAuth, getAccount srcId state with
-            | (true, Some srcAcc) ->
+            match getAccount srcId state with
+            | Some srcAcc ->
                 let newState =
                     state
                     |> setAccount
@@ -87,10 +103,7 @@ let apply (state: State) (transaction: Transaction): Result<State * TransactionR
                     |> addTransaction transaction
 
                 Ok(newState, SuccessfulResult)
-            | (true, None) -> Error DestinationDoesNotExistError
-            | (false, _) -> Error UnauthorizedError
-
-        | TransferAction (amount, _) when amount <= 0m -> Error InvalidAmountError
+            | None -> Error UnauthorizedError
 
         | TransferAction (amount, destId) ->
             let srcId = transaction.Account
@@ -112,5 +125,5 @@ let apply (state: State) (transaction: Transaction): Result<State * TransactionR
                         |> addTransaction transaction
 
                     Ok(newState, SuccessfulResult)
-            | _, None -> Error DestinationDoesNotExistError
             | None, _ -> Error UnauthorizedError
+            | _, None -> Error DestinationDoesNotExistError

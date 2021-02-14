@@ -3,25 +3,38 @@ namespace CentralBank.Accounting
 /// A unique account identifier.
 type AccountId = string
 
+type CurrencyAmount = decimal
+
 /// An action that an account can perform.
 type AccountAction =
     /// Transfers an amount from one account to another.
-    | TransferAction of amount: decimal * destination: AccountId
+    | TransferAction of amount: CurrencyAmount * destination: AccountId
 
     /// Generates an amount and adds it to the account balance.
-    | MintAction of amount: decimal
+    | MintAction of amount: CurrencyAmount
 
 /// A unique access token identifier.
 type AccessTokenId = string
 
-/// An access token scope, which defines which transactions an access
-/// token may perform.
-type AccessTokenScope =
+/// An access scope, which defines which transactions may be
+/// performed. Access scopes may affect either access tokens or
+/// user privileges.
+type AccessScope =
     /// Allows for any action to be performed.
     | UnboundedScope
 
     /// Allows transfers.
     | TransferScope
+
+    /// Allows for the minting of new currency.
+    | MintScope
+
+    /// Allows an account to perform actions as another account
+    /// without proxy access. Admin accounts cannot perform types
+    /// of actions they are themselves not privileged for (e.g.,
+    /// an admin cannot mint currency using someone else's account
+    /// unless the admin has minting privileges).
+    | AdminScope
 
 /// A description of how a transaction is authorized.
 type TransactionAuthorization =
@@ -61,7 +74,7 @@ type TransactionResult =
     | SuccessfulResult
 
     /// Produces the balance of an account.
-    | BalanceResult of amount: decimal
+    | BalanceResult of amount: CurrencyAmount
 
 type TransactionError =
     /// Indicates the the transaction was inadequately authorized.
