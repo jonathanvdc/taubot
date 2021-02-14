@@ -59,3 +59,11 @@ type ProcessorTests() =
         |> this.ApplyQuery(this.CreateAdminTransaction QueryBalanceAction "user")
         |> (=) (BalanceResult 0m)
         |> Assert.IsTrue
+
+    [<TestMethod>]
+    member this.TestMint() =
+        this.InitialState
+        |> this.ApplyAction(this.CreatePrimeMoverTransaction (MintAction 10m))
+        |> this.ApplyQuery(this.CreatePrimeMoverTransaction QueryBalanceAction)
+        |> (=) (BalanceResult 10m)
+        |> Assert.IsTrue
