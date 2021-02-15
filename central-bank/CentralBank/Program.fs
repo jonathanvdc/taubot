@@ -20,7 +20,7 @@ let processTransaction transaction =
     // the central bank server.
     match transaction.AccessToken, isQuery transaction.Action with
     | None, _ -> Error UnauthorizedError
-    | _, true ->
+    | Some _, true ->
         try
             // Acquire a write lock so the state cannot be modified as we
             // read it.
@@ -35,7 +35,7 @@ let processTransaction transaction =
         finally
             // Release the read lock so other threads can modify the state.
             stateLock.ExitReadLock()
-    | _, false ->
+    | Some _, false ->
         try
             // Acquire a write lock so no two threads modify the state at the
             // same time.
