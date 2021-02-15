@@ -49,6 +49,13 @@ let isInScopeForAny action scopes =
     Seq.tryFind (isInScope action) scopes
     |> Option.isSome
 
+/// Tells if an action represents a query. Queries cannot change state; they
+/// can only inspect it.
+let isQuery action =
+    match action with
+    | QueryBalanceAction -> true
+    | _ -> false
+
 let validateAction action =
     match action with
     | MintAction amount when amount <= 0m -> Error InvalidAmountError
