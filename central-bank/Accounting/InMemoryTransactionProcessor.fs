@@ -19,10 +19,7 @@ type State =
       History: Transaction list
 
       /// The default set of privileges for an account.
-      DefaultPrivileges: AccessScope Set
-
-      /// The random number generator to use.
-      Rng: Random }
+      DefaultPrivileges: AccessScope Set }
 
 /// Gets an account's associated data, if it exists.
 let getAccount accountId state = Map.tryFind accountId state.Accounts
@@ -76,7 +73,7 @@ let rec checkProxyChain (state: State) (chain: AccountId list) =
 
 /// Authenticates a transaction. Returns a Boolean value that indicates whether
 /// or not the transaction could be authenticated.
-let authenticate transaction state: bool =
+let authenticate (transaction: Transaction) state: bool =
     // Check that the proxy chain is okay.
     checkProxyChain state (proxyChain transaction)
     // Check that the authorizer is an admin if the transaction is admin-authorized.
@@ -98,15 +95,7 @@ let emptyState =
       History = []
       DefaultPrivileges =
           Set.ofList [ QueryBalanceScope
-                       TransferScope ]
-      Rng = Random() }
-
-/// Randomly generates a new token ID.
-let generateTokenId state =
-    // Generate 40 random bytes and base64-encode them.
-    let buffer = Array.create 40 1uy
-    state.Rng.NextBytes(buffer)
-    Convert.ToBase64String buffer
+                       TransferScope ] }
 
 /// Processes a transaction.
 let apply (transaction: Transaction) (state: State): Result<State * TransactionResult, TransactionError> =
@@ -118,7 +107,7 @@ let apply (transaction: Transaction) (state: State): Result<State * TransactionR
         match transaction.Action with
         | QueryBalanceAction -> Ok(state, BalanceResult srcAcc.Balance)
 
-        | OpenAccountAction newId ->
+        | OpenAccountAction (newId, tokenId) ->
             if accountExists newId state then
                 Error AccountAlreadyExistsError
             else
@@ -127,8 +116,6 @@ let apply (transaction: Transaction) (state: State): Result<State * TransactionR
                 // This token will have unbounded scope. The account opener is
                 // assumed to be a trusted third party (and needs special
                 // permission to open accounts).
-                let tokenId = generateTokenId state
-
                 let newState =
                     state
                     |> setAccount

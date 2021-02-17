@@ -6,9 +6,9 @@
 
   <ItemGroup>
     <Compile Include="Transaction.fs" />
+    <Compile Include="TransactionRequest.fs" />
     <Compile Include="Helpers.fs" />
     <Compile Include="InMemoryTransactionProcessor.fs" />
-    <Compile Include="LedgerProcessor.fs" />
   </ItemGroup>
 
   <ItemGroup>

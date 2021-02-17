@@ -1,9 +1,10 @@
 module Accounting.Helpers
+open System
 
 /// Constructs the proxy chain that authorizes a transaction. A proxy chain
 /// is a list of account IDs where successive elements in the chain must
 /// have proxy access.
-let proxyChain transaction =
+let proxyChain (transaction: Transaction) =
     let rec impl authorization =
         match authorization with
         | SelfAuthorized -> [ transaction.Account ]
@@ -14,7 +15,7 @@ let proxyChain transaction =
 
 /// Gets the account that ultimately authorized a transaction. This
 /// corresponds to the final account in a proxy chain.
-let finalAuthorizer transaction =
+let finalAuthorizer (transaction: Transaction) =
     let rec impl authorization =
         match authorization with
         | SelfAuthorized -> transaction.Account
@@ -24,7 +25,7 @@ let finalAuthorizer transaction =
     impl transaction.Authorization
 
 /// Tells if a transaction is ultimately authorized by an admin.
-let isAdminAuthorized transaction =
+let isAdminAuthorized (transaction: Transaction) =
     let rec impl authorization =
         match authorization with
         | SelfAuthorized -> false
@@ -61,3 +62,10 @@ let validateAction action =
     | MintAction amount when amount <= 0m -> Error InvalidAmountError
     | TransferAction (amount, _) when amount <= 0m -> Error InvalidAmountError
     | _ -> Ok()
+
+/// Randomly generates a new token ID.
+let generateTokenId (rng: Random) =
+    // Generate 40 random bytes and base64-encode them.
+    let buffer = Array.create 40 1uy
+    rng.NextBytes(buffer)
+    Convert.ToBase64String buffer

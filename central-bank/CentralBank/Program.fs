@@ -1,3 +1,5 @@
+module CentralBank.Main
+
 open System.Threading
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
@@ -11,6 +13,7 @@ open Accounting
 open Accounting.Helpers
 
 let mutable state = InMemoryTransactionProcessor.emptyState
+let applyTransaction = InMemoryTransactionProcessor.apply
 let stateLock = new ReaderWriterLockSlim()
 
 /// Processes a transaction.
@@ -28,7 +31,7 @@ let processTransaction transaction =
 
             // Apply the transaction and return the result. We don't have
             // to update the state because queries do not change state.
-            match InMemoryTransactionProcessor.apply transaction state with
+            match applyTransaction transaction state with
             | Ok (_, response) -> Ok response
             | Error e -> Error e
 
@@ -42,7 +45,7 @@ let processTransaction transaction =
             stateLock.EnterWriteLock()
 
             // Apply the transaction and respond.
-            match InMemoryTransactionProcessor.apply transaction state with
+            match applyTransaction transaction state with
             | Ok (newState, response) ->
                 state <- newState
                 Ok response

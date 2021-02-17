@@ -1,9 +1,14 @@
 namespace Accounting
 
+open System
+
 /// A unique account identifier.
 type AccountId = string
 
 type CurrencyAmount = decimal
+
+/// A unique access token identifier.
+type AccessTokenId = string
 
 /// An action that an account can perform.
 type AccountAction =
@@ -16,11 +21,9 @@ type AccountAction =
     /// An action that queries an account's balance.
     | QueryBalanceAction
 
-    /// An action that opens a new account.
-    | OpenAccountAction of accountId: AccountId
-
-/// A unique access token identifier.
-type AccessTokenId = string
+    /// An action that opens a new account and creates a token that
+    /// can be used to configure the new account.
+    | OpenAccountAction of accountId: AccountId * tokenId : AccessTokenId
 
 /// An access scope, which defines which transactions may be
 /// performed. Access scopes may affect either access tokens or
@@ -66,6 +69,12 @@ type TransactionAuthorization =
 /// required to validate the transaction.
 type Transaction =
     {
+      /// The transaction's unique identifier.
+      Id: string
+
+      /// The point in time at which the transaction was performed.
+      PerformedAt: DateTime
+
       /// The account performing the transaction.
       Account: AccountId
 

@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="HistoryDatabaseProcessor.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
@@ -15,6 +16,7 @@
 
   <ItemGroup>
     <PackageReference Include="Giraffe" Version="4.1.0" />
+    <PackageReference Include="LiteDB.FSharp" Version="2.15.1" />
   </ItemGroup>
 
 </Project>
