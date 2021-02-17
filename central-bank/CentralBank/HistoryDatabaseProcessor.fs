@@ -2,7 +2,6 @@
 module Accounting.HistoryDatabaseProcessor
 
 open LiteDB
-open LiteDB.FSharp
 open LiteDB.FSharp.Extensions
 
 /// A history database processor's state.
