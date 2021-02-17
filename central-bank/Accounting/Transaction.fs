@@ -10,6 +10,9 @@ type CurrencyAmount = decimal
 /// A unique access token identifier.
 type AccessTokenId = string
 
+/// A unique transaction identifier.
+type TransactionId = string
+
 /// An action that an account can perform.
 type AccountAction =
     /// Transfers an amount from one account to another.
@@ -20,6 +23,10 @@ type AccountAction =
 
     /// An action that queries an account's balance.
     | QueryBalanceAction
+
+    /// An action that queries an account's history starting at a particular
+    /// point in time.
+    | QueryHistoryAction of since: DateTime
 
     /// An action that opens a new account and creates a token that
     /// can be used to configure the new account.
@@ -34,6 +41,9 @@ type AccessScope =
 
     /// Allows for the account's balance to be queried.
     | QueryBalanceScope
+
+    /// Allows for this account's transaction history to be queried.
+    | QueryHistoryScope
 
     /// Allows transfers.
     | TransferScope
@@ -70,7 +80,7 @@ type TransactionAuthorization =
 type Transaction =
     {
       /// The transaction's unique identifier.
-      Id: string
+      Id: TransactionId
 
       /// The point in time at which the transaction was performed.
       PerformedAt: DateTime
@@ -92,7 +102,10 @@ type Transaction =
 type TransactionResult =
     /// Indicates that the transaction was successfully applied
     /// and that no further feedback is provided.
-    | SuccessfulResult
+    | SuccessfulResult of transactionId: TransactionId
+
+    /// A result that is composed of a list of past transactions.
+    | HistoryResult of transactions: Transaction list
 
     /// Produces the balance of an account.
     | BalanceResult of amount: CurrencyAmount
@@ -117,6 +130,9 @@ type TransactionError =
     /// A response to an account creation request, indicating that
     /// the account already exists.
     | AccountAlreadyExistsError
+
+    /// Indicates that the action has not been implemented (yet).
+    | ActionNotImplementedError
 
 /// Applies a transaction. If the transaction can be applied,
 /// a result is returned; otherwise, an error is returned.

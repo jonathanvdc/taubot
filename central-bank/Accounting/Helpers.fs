@@ -41,6 +41,7 @@ let isInScope action scope =
     | TransferAction _, TransferScope -> true
     | MintAction _, MintScope -> true
     | QueryBalanceAction, QueryBalanceScope -> true
+    | QueryHistoryAction _, QueryHistoryScope -> true
     | OpenAccountAction _, OpenAccountScope -> true
     | _, _ -> false
 

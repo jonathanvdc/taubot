@@ -1,6 +1,5 @@
 module Accounting.InMemoryTransactionProcessor
 
-open System
 open Accounting.Helpers
 
 type AccountData =
@@ -96,6 +95,11 @@ let apply (transaction: Transaction) (state: State): Result<State * TransactionR
     | Ok _, true, None -> Error UnauthorizedError
     | Ok _, true, Some srcAcc ->
         match transaction.Action with
+        // Some actions like history querying are intentionally not
+        // implemented by this processor. Processors that build on
+        // this processor can implement them instead.
+        | QueryHistoryAction _ -> Error ActionNotImplementedError
+
         | QueryBalanceAction -> Ok(state, BalanceResult srcAcc.Balance)
 
         | OpenAccountAction (newId, tokenId) ->
@@ -128,7 +132,7 @@ let apply (transaction: Transaction) (state: State): Result<State * TransactionR
                     { srcAcc with
                           Balance = srcAcc.Balance + amount }
 
-            Ok(newState, SuccessfulResult)
+            Ok(newState, SuccessfulResult transaction.Id)
 
         | TransferAction (amount, destId) ->
             let srcId = transaction.Account
@@ -148,5 +152,5 @@ let apply (transaction: Transaction) (state: State): Result<State * TransactionR
                                   Balance = destAcc.Balance + amount }
                         |> setAccount srcId { srcAcc with Balance = newBalance }
 
-                    Ok(newState, SuccessfulResult)
+                    Ok(newState, SuccessfulResult transaction.Id)
             | None -> Error DestinationDoesNotExistError
