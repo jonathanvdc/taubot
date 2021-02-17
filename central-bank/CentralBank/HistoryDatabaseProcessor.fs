@@ -1,8 +1,6 @@
 /// A transaction processor that retains a database of all transactions.
 module Accounting.HistoryDatabaseProcessor
 
-open System
-open System.IO
 open LiteDB
 
 /// A history database processor's state.
@@ -31,3 +29,8 @@ let apply (transaction: Transaction) (state: 'a State): Result<'a State * Transa
     | Ok (newState, response) ->
         writeToDatabase transaction state.Database
         Ok({ state with InnerState = newState }, response)
+
+let wrap database apply state =
+    { InnerState = state
+      InnerApply = apply
+      Database = database }
