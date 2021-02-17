@@ -7,3 +7,7 @@ obj/
 
 .fake
 .ionide
+
+# Databases.
+*.db
+
