@@ -58,15 +58,15 @@ let loadTransactions (database: LiteDatabase) =
 
 /// Loads a database.
 let load database innerApply innerState =
-    let initialState =
-        { InnerState = innerState
-          InnerApply = innerApply
-          Database = database }
-
     let accumulateTransaction s transaction =
-        match apply transaction s with
+        match innerApply transaction s with
         | Error _ -> s
         | Ok (s', _) -> s'
 
-    loadTransactions database
-    |> Seq.fold accumulateTransaction initialState
+    let newInnerState =
+        loadTransactions database
+        |> Seq.fold accumulateTransaction innerState
+
+    { InnerState = newInnerState
+      InnerApply = innerApply
+      Database = database }

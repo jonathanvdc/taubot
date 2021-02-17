@@ -124,6 +124,21 @@ let apply (transaction: Transaction) (state: State): Result<State * TransactionR
 
                 Ok(newState, AccessTokenResult tokenId)
 
+        | CreateTokenAction (tokenId, scopes) ->
+            match Map.tryFind tokenId srcAcc.Tokens with
+            | Some _ -> Error TokenAlreadyExistsError
+            | None ->
+                let newState =
+                    state
+                    |> setAccount
+                        transaction.Account
+                        { srcAcc with
+                              Tokens =
+                                  srcAcc.Tokens
+                                  |> Map.add tokenId scopes }
+
+                Ok(newState, AccessTokenResult tokenId)
+
         | MintAction amount ->
             let newState =
                 state

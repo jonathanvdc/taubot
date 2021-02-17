@@ -29,22 +29,20 @@ type AppState =
 
 let applyTransaction = HistoryDatabaseProcessor.apply
 
-/// Processes a transaction.
-let processTransaction (request: TransactionRequest) (state: AppState) =
-    let transaction =
-        { Id = Interlocked.Increment(&state.IdCounter)
-          PerformedAt = DateTime.UtcNow
-          Account = request.Account
-          Authorization = request.Authorization
-          AccessToken = request.AccessToken
-          Action = request.Action }
+let wrapTransactionRequest (request: TransactionRequest) (state: AppState) =
+    { Id = Interlocked.Increment(&state.IdCounter)
+      PerformedAt = DateTime.UtcNow
+      Account = request.Account
+      Authorization = request.Authorization
+      AccessToken = request.AccessToken
+      Action = request.Action }
 
-    // Check that the transaction has an access token. Transactions without
-    // access tokens are possible, but they may not originate from beyond
-    // the central bank server.
-    match transaction.AccessToken, isQuery transaction.Action with
-    | None, _ -> Error UnauthorizedError
-    | Some _, true ->
+/// Processes a trusted transaction.
+let processTrustedTransaction (request: TransactionRequest) (state: AppState) =
+    let transaction = wrapTransactionRequest request state
+
+    match isQuery transaction.Action with
+    | true ->
         try
             // Acquire a write lock so the state cannot be modified as we
             // read it.
@@ -59,7 +57,7 @@ let processTransaction (request: TransactionRequest) (state: AppState) =
         finally
             // Release the read lock so other threads can modify the state.
             state.StateLock.ExitReadLock()
-    | Some _, false ->
+    | false ->
         try
             // Acquire a write lock so no two threads modify the state at the
             // same time.
@@ -76,9 +74,61 @@ let processTransaction (request: TransactionRequest) (state: AppState) =
             // Release the write lock so other threads can modify the state.
             state.StateLock.ExitWriteLock()
 
+/// Processes an untrusted transaction.
+let processUntrustedTransaction (request: TransactionRequest) (state: AppState) =
+    // Check that the transaction has an access token. Transactions without
+    // access tokens are possible, but they may not originate from beyond
+    // the central bank server.
+    match request.AccessToken with
+    | None -> Error UnauthorizedError
+    | Some _ -> processTrustedTransaction request state
+
 let configureServices (services: IServiceCollection) =
     // Add Giraffe dependencies
     services.AddGiraffe() |> ignore
+
+/// Registers a root account that can be used to set up further accounts.
+let withRoot (state: InMemoryTransactionProcessor.State) =
+    InMemoryTransactionProcessor.setAccount
+        "@root"
+        { Balance = 0m
+          ProxyAccess = Set.empty
+          Privileges = Set.singleton UnboundedScope
+          Tokens = Map.empty }
+        state
+
+let okOrPanic result =
+    match result with
+    | Ok x -> x
+    | Error e -> raise (Exception(e.ToString()))
+
+let rootTransactionRequest (action: AccountAction): TransactionRequest =
+    { Account = "@root"
+      Authorization = SelfAuthorized
+      AccessToken = None
+      Action = action }
+
+/// Gets all tokens for the root account. If there are no such tokens,
+/// then a new unbounded token is created to facilitate setup.
+let rec rootTokens (state: AppState) =
+    let rootAcc =
+        Map.find "@root" state.TransactionProcessorState.InnerState.Accounts
+
+    if Map.isEmpty rootAcc.Tokens then
+        let tokenId = generateTokenId (Random())
+        let tokenScopes = Set.singleton UnboundedScope
+
+        let request =
+            CreateTokenAction(tokenId, tokenScopes)
+            |> rootTransactionRequest
+
+        processTrustedTransaction request state
+        |> okOrPanic
+        |> ignore
+
+        Map.empty |> Map.add tokenId tokenScopes
+    else
+        rootAcc.Tokens
 
 [<EntryPoint>]
 let main _ =
@@ -90,6 +140,7 @@ let main _ =
     let appState =
         { TransactionProcessorState =
               InMemoryTransactionProcessor.emptyState
+              |> withRoot
               |> HistoryDatabaseProcessor.load database InMemoryTransactionProcessor.apply
           IdCounter =
               HistoryDatabaseProcessor.loadTransactions database
@@ -98,6 +149,14 @@ let main _ =
               |> Seq.max
           StateLock = stateLock }
 
+    // Print root account tokens.
+    printfn "Root tokens:"
+    rootTokens appState
+    |> Map.toSeq
+    |> Seq.map (fun (k, v) -> sprintf " - %s %A" k (v |> Seq.map (sprintf "%A") |> String.concat ", "))
+    |> String.concat Environment.NewLine
+    |> printfn "%s"
+
     /// Processes a transaction request.
     let processTransactionRequest (next: HttpFunc) (ctx: HttpContext) =
         task {
@@ -105,7 +164,7 @@ let main _ =
                 ctx.BindJsonAsync<TransactionRequest>()
                 |> Async.AwaitTask
 
-            return! json (processTransaction request appState) next ctx
+            return! json (processUntrustedTransaction request appState) next ctx
         }
 
     /// Routes requests.
