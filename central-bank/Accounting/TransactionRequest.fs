@@ -12,7 +12,7 @@ type TransactionRequest =
 
       /// An access token that is used as the root of the
       /// authorization chain.
-      AccessToken: AccessTokenId
+      AccessToken: AccessTokenId option
 
       /// The action being performed.
       Action: AccountAction }

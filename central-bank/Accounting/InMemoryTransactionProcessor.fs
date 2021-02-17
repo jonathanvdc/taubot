@@ -14,10 +14,6 @@ type State =
       /// A mapping of accounts to their current states.
       Accounts: Map<AccountId, AccountData>
 
-      /// A list of all previously applied non-query transactions,
-      /// in reverse order (latest transaction first).
-      History: Transaction list
-
       /// The default set of privileges for an account.
       DefaultPrivileges: AccessScope Set }
 
@@ -32,10 +28,6 @@ let accountExists accountId state =
 let setAccount accountId data state =
     { state with
           Accounts = Map.add accountId data state.Accounts }
-
-let addTransaction transaction state =
-    { state with
-          History = transaction :: state.History }
 
 let privileges accountId state =
     match getAccount accountId state with
@@ -92,7 +84,6 @@ let authenticate (transaction: Transaction) state: bool =
 /// An initial, empty state for an in-memory transaction processor.
 let emptyState =
     { Accounts = Map.empty
-      History = []
       DefaultPrivileges =
           Set.ofList [ QueryBalanceScope
                        TransferScope ] }
@@ -126,7 +117,6 @@ let apply (transaction: Transaction) (state: State): Result<State * TransactionR
                           Tokens =
                               Map.empty
                               |> Map.add tokenId (Set.singleton UnboundedScope) }
-                    |> addTransaction transaction
 
                 Ok(newState, AccessTokenResult tokenId)
 
@@ -137,7 +127,6 @@ let apply (transaction: Transaction) (state: State): Result<State * TransactionR
                     transaction.Account
                     { srcAcc with
                           Balance = srcAcc.Balance + amount }
-                |> addTransaction transaction
 
             Ok(newState, SuccessfulResult)
 
@@ -158,7 +147,6 @@ let apply (transaction: Transaction) (state: State): Result<State * TransactionR
                             { destAcc with
                                   Balance = destAcc.Balance + amount }
                         |> setAccount srcId { srcAcc with Balance = newBalance }
-                        |> addTransaction transaction
 
                     Ok(newState, SuccessfulResult)
             | None -> Error DestinationDoesNotExistError
