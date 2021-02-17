@@ -21,18 +21,18 @@ type AppState =
       /// The transaction processor's state.
       mutable TransactionProcessorState: InMemoryTransactionProcessor.State HistoryDatabaseProcessor.State
 
-      /// A lock on the transaction processor's state.
-      StateLock: ReaderWriterLockSlim
+      /// The transaction ID counter.
+      mutable IdCounter: uint64
 
-      /// A random number generator.
-      Rng: Random }
+      /// A lock on the transaction processor's state.
+      StateLock: ReaderWriterLockSlim }
 
 let applyTransaction = HistoryDatabaseProcessor.apply
 
 /// Processes a transaction.
 let processTransaction (request: TransactionRequest) (state: AppState) =
     let transaction =
-        { Id = generateTokenId state.Rng
+        { Id = Interlocked.Increment(&state.IdCounter)
           PerformedAt = DateTime.UtcNow
           Account = request.Account
           Authorization = request.Authorization
@@ -82,15 +82,21 @@ let configureServices (services: IServiceCollection) =
 
 [<EntryPoint>]
 let main _ =
-    use database = new LiteDatabase("transactions.db", FSharpBsonMapper())
+    use database =
+        new LiteDatabase("transactions.db", FSharpBsonMapper())
+
     use stateLock = new ReaderWriterLockSlim()
 
     let appState =
         { TransactionProcessorState =
               InMemoryTransactionProcessor.emptyState
-              |> HistoryDatabaseProcessor.wrap database InMemoryTransactionProcessor.apply
-          StateLock = stateLock
-          Rng = Random() }
+              |> HistoryDatabaseProcessor.load database InMemoryTransactionProcessor.apply
+          IdCounter =
+              HistoryDatabaseProcessor.loadTransactions database
+              |> Seq.map (fun t -> t.Id)
+              |> Seq.append (Seq.singleton 0UL)
+              |> Seq.max
+          StateLock = stateLock }
 
     /// Processes a transaction request.
     let processTransactionRequest (next: HttpFunc) (ctx: HttpContext) =

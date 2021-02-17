@@ -11,7 +11,7 @@ type CurrencyAmount = decimal
 type AccessTokenId = string
 
 /// A unique transaction identifier.
-type TransactionId = string
+type TransactionId = uint64
 
 /// An action that an account can perform.
 type AccountAction =

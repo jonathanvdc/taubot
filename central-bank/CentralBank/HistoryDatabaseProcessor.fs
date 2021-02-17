@@ -51,7 +51,22 @@ let apply (transaction: Transaction) (state: 'a State): Result<'a State * Transa
         writeToDatabase transaction state.Database
         Ok({ state with InnerState = newState }, response)
 
-let wrap database apply state =
-    { InnerState = state
-      InnerApply = apply
-      Database = database }
+/// Loads all transactions from a database, sorted by ID.
+let loadTransactions (database: LiteDatabase) =
+    database.GetCollection<Transaction>().FindAll()
+    |> Seq.sortBy (fun t -> t.Id)
+
+/// Loads a database.
+let load database innerApply innerState =
+    let initialState =
+        { InnerState = innerState
+          InnerApply = innerApply
+          Database = database }
+
+    let accumulateTransaction s transaction =
+        match apply transaction s with
+        | Error _ -> s
+        | Ok (s', _) -> s'
+
+    loadTransactions database
+    |> Seq.fold accumulateTransaction initialState
