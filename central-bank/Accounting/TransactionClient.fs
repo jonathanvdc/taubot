@@ -13,10 +13,10 @@ type TransactionClient(baseUrl: string) =
     static member TransactionRoute = "/api/transaction"
 
     /// Asynchronously requests for a transaction to be performed.
-    member this.RequestTransactionAsync(request: TransactionRequest) =
+    member this.PerformTransactionAsync(request: TransactionRequest) =
         async {
             let postUrl =
-                sprintf "%s/%s" baseUrl TransactionClient.TransactionRoute
+                sprintf "%s%s" baseUrl TransactionClient.TransactionRoute
 
             let json = JsonConvert.SerializeObject(request)
 
