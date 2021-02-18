@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <Compile Include="HistoryDatabaseProcessor.fs" />
+    <Compile Include="Options.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
@@ -15,6 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="CommandLineParser.FSharp" Version="2.8.0" />
     <PackageReference Include="Giraffe" Version="4.1.0" />
     <PackageReference Include="LiteDB.FSharp" Version="2.15.1" />
   </ItemGroup>

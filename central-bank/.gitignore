@@ -11,3 +11,5 @@ obj/
 # Databases.
 *.db
 
+# Config files.
+config.json

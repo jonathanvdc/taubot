@@ -1,6 +1,7 @@
 module CentralBank.Main
 
 open System
+open System.IO
 open System.Threading
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
@@ -13,6 +14,7 @@ open FSharp.Control.Tasks.V2
 open LiteDB
 open LiteDB.FSharp
 
+open Options
 open Accounting
 open Accounting.Helpers
 
@@ -100,7 +102,7 @@ let withRoot (state: InMemoryTransactionProcessor.State) =
 let okOrPanic result =
     match result with
     | Ok x -> x
-    | Error e -> raise (Exception(e.ToString()))
+    | Error e -> failwithf "%A" e
 
 let rootTransactionRequest (action: AccountAction): TransactionRequest =
     { Account = "@root"
@@ -130,10 +132,18 @@ let rec rootTokens (state: AppState) =
     else
         rootAcc.Tokens
 
-[<EntryPoint>]
-let main _ =
+let relativeTo (relativeBase: string) (path: string) =
+    Path.Combine(relativeBase, path)
+
+let start (configPath: string) (config: AppConfiguration) =
+    let databasePath =
+        match config.DatabasePath with
+        | null -> "database.db"
+        | other -> other
+        |> relativeTo (Path.GetDirectoryName configPath)
+
     use database =
-        new LiteDatabase("transactions.db", FSharpBsonMapper())
+        new LiteDatabase(databasePath, FSharpBsonMapper())
 
     use stateLock = new ReaderWriterLockSlim()
 
@@ -151,6 +161,7 @@ let main _ =
 
     // Print root account tokens.
     printfn "Root tokens:"
+
     rootTokens appState
     |> Map.toSeq
     |> Seq.map (fun (k, v) -> sprintf " - %s %A" k (v |> Seq.map (sprintf "%A") |> String.concat ", "))
@@ -187,4 +198,19 @@ let main _ =
         .Build()
         .Run()
 
-    0
+[<EntryPoint>]
+let main argv =
+    match parseOptions argv with
+    | Success opts ->
+        match parseConfig opts.ConfigPath with
+        | Ok config ->
+            start opts.ConfigPath config
+            0
+        | Error e ->
+            printfn "Error: %s" e
+            1
+    | Fail errs ->
+        printfn "Invalid: %A, Errors: %u" argv (Seq.length errs)
+        1
+    | Help
+    | Version -> 0
