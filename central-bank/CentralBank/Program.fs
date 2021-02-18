@@ -181,7 +181,7 @@ let start (configPath: string) (config: AppConfiguration) =
     /// Routes requests.
     let webApp =
         POST
-        >=> route "/api/transaction"
+        >=> route TransactionClient.TransactionRoute
         >=> processTransactionRequest
 
     let configureApp (app: IApplicationBuilder) =

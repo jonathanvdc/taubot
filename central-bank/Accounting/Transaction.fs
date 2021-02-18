@@ -141,6 +141,9 @@ type TransactionError =
     /// Indicates that the action has not been implemented (yet).
     | ActionNotImplementedError
 
+    /// Indicates that a network error occurred.
+    | NetworkError of statusCode: Net.HttpStatusCode * responseBody: string
+
 /// Applies a transaction. If the transaction can be applied,
 /// a result is returned; otherwise, an error is returned.
 type TransactionProcessor<'state> = Transaction -> 'state -> Result<'state * TransactionResult, TransactionError>
