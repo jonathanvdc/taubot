@@ -48,7 +48,7 @@ let main argv =
         let tokenId = generateTokenId (Random())
 
         match performRootAction opts (OpenAccountAction(opts.AccountName, tokenId)) with
-        | Ok _ -> printfn "Account %s has been created." opts.AccountName
+        | Ok _ -> printfn "Account %s has been created. Its access token is: %s" opts.AccountName tokenId
         | Error AccountAlreadyExistsError -> printfn "Account %s already exists." opts.AccountName
         | Error UnauthorizedError -> printfn "Authorization error. Are you sure your access token ID is correct?"
         | Error e -> printfn "Error: %A" e
