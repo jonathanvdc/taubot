@@ -85,6 +85,8 @@ let emptyState =
     { Accounts = Map.empty
       DefaultPrivileges =
           Set.ofList [ QueryBalanceScope
+                       QueryHistoryScope
+                       QueryPrivilegesScope
                        TransferScope ] }
 
 /// Processes a transaction.
