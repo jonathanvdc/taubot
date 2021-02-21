@@ -1,4 +1,5 @@
 module Accounting.Helpers
+
 open System
 
 /// Constructs the proxy chain that authorizes a transaction. A proxy chain
@@ -55,7 +56,8 @@ let isInScopeForAny action scopes =
 /// can only inspect it.
 let isQuery action =
     match action with
-    | QueryBalanceAction -> true
+    | QueryBalanceAction
+    | QueryPrivilegesAction -> true
     | _ -> false
 
 let validateAction action =

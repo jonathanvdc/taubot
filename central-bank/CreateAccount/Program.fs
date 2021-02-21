@@ -14,7 +14,13 @@ type Options =
       RootAccessToken: string
 
       [<Option("server", HelpText = "A URL to the central bank server.", Required = true)>]
-      ServerUrl: string }
+      ServerUrl: string
+
+      [<Option("make-broker",
+               Default = false,
+               HelpText = "Specifies if the newly created account should be authorized as a broker.",
+               Required = false)>]
+      MakeBroker: bool }
 
 let inline (|Success|Help|Version|Fail|) (result: ParserResult<'a>) =
     match result with
@@ -48,7 +54,13 @@ let main argv =
         let tokenId = generateTokenId (Random())
 
         match performRootAction opts (OpenAccountAction(opts.AccountName, tokenId)) with
-        | Ok _ -> printfn "Account %s has been created. Its access token is: %s" opts.AccountName tokenId
+        | Ok _ ->
+            printfn "Account %s has been created. Its access token is: %s" opts.AccountName tokenId
+
+            if opts.MakeBroker then
+                match performRootAction opts (AddPrivilegesAction(opts.AccountName, Set.singleton OpenAccountScope)) with
+                | Ok _ -> printfn "Account %s has been authorized to open accounts." opts.AccountName
+                | Error e -> printfn "Error: %A" e
         | Error AccountAlreadyExistsError -> printfn "Account %s already exists." opts.AccountName
         | Error UnauthorizedError -> printfn "Authorization error. Are you sure your access token ID is correct?"
         | Error e -> printfn "Error: %A" e

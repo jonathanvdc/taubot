@@ -26,6 +26,9 @@ type AccessScope =
     /// Allows for this account's transaction history to be queried.
     | QueryHistoryScope
 
+    /// Allows for this account's authorizations to be queried.
+    | QueryPrivilegesScope
+
     /// Allows transfers.
     | TransferScope
 
@@ -53,6 +56,9 @@ type AccountAction =
     /// An action that queries an account's balance.
     | QueryBalanceAction
 
+    /// An action that queries an account's privileges.
+    | QueryPrivilegesAction
+
     /// An action that queries an account's history starting at a particular
     /// point in time.
     | QueryHistoryAction of since: DateTime
@@ -63,6 +69,12 @@ type AccountAction =
 
     /// An action that creates a new token.
     | CreateTokenAction of tokenId: AccessTokenId * tokenScopes: AccessScope Set
+
+    /// An action that adds privileges to an account.
+    | AddPrivilegesAction of accountId: AccountId * privileges: AccessScope Set
+
+    /// An action that removes privileges from an account.
+    | RemovePrivilegesAction of accountId: AccountId * privileges: AccessScope Set
 
 /// A description of how a transaction is authorized.
 type TransactionAuthorization =
@@ -115,6 +127,9 @@ type TransactionResult =
 
     /// Returns an access token.
     | AccessTokenResult of tokenId: AccessTokenId
+
+    /// Produces a set of access scopes.
+    | AccessScopesResult of scopes: AccessScope Set
 
 type TransactionError =
     /// Indicates the the transaction was inadequately authorized.

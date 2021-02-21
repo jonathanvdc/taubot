@@ -101,6 +101,33 @@ let apply (transaction: Transaction) (state: State): Result<State * TransactionR
         | QueryHistoryAction _ -> Error ActionNotImplementedError
 
         | QueryBalanceAction -> Ok(state, BalanceResult srcAcc.Balance)
+        | QueryPrivilegesAction -> Ok(state, AccessScopesResult srcAcc.Privileges)
+
+        | AddPrivilegesAction (accId, privileges) ->
+            match getAccount accId state with
+            | Some destAcc ->
+                let newState =
+                    state
+                    |> setAccount
+                        accId
+                        { destAcc with
+                              Privileges = Set.union destAcc.Privileges privileges }
+
+                Ok(newState, SuccessfulResult transaction.Id)
+            | None -> Error DestinationDoesNotExistError
+
+        | RemovePrivilegesAction (accId, privileges) ->
+            match getAccount accId state with
+            | Some destAcc ->
+                let newState =
+                    state
+                    |> setAccount
+                        accId
+                        { destAcc with
+                              Privileges = Set.difference destAcc.Privileges privileges }
+
+                Ok(newState, SuccessfulResult transaction.Id)
+            | None -> Error DestinationDoesNotExistError
 
         | OpenAccountAction (newId, tokenId) ->
             if accountExists newId state then
@@ -133,9 +160,7 @@ let apply (transaction: Transaction) (state: State): Result<State * TransactionR
                     |> setAccount
                         transaction.Account
                         { srcAcc with
-                              Tokens =
-                                  srcAcc.Tokens
-                                  |> Map.add tokenId scopes }
+                              Tokens = srcAcc.Tokens |> Map.add tokenId scopes }
 
                 Ok(newState, AccessTokenResult tokenId)
 
