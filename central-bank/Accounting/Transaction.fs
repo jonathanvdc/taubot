@@ -5,7 +5,7 @@ open System
 /// A unique account identifier.
 type AccountId = string
 
-type CurrencyAmount = decimal
+type CurrencyAmount = int64
 
 /// A unique access token identifier.
 type AccessTokenId = string

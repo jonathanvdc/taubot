@@ -144,7 +144,7 @@ let apply (transaction: Transaction) (state: State): Result<State * TransactionR
                     state
                     |> setAccount
                         newId
-                        { Balance = 0m
+                        { Balance = 0L
                           Privileges = state.DefaultPrivileges
                           ProxyAccess = Set.empty
                           Tokens =
@@ -183,7 +183,7 @@ let apply (transaction: Transaction) (state: State): Result<State * TransactionR
             | Some destAcc ->
                 let newBalance = srcAcc.Balance - amount
 
-                if newBalance < 0.0m then
+                if newBalance < 0L then
                     Error InsufficientFundsError
                 else
                     let newState =

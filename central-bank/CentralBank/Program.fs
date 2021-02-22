@@ -93,7 +93,7 @@ let configureServices (services: IServiceCollection) =
 let withRoot (state: InMemoryTransactionProcessor.State) =
     InMemoryTransactionProcessor.setAccount
         "@root"
-        { Balance = 0m
+        { Balance = 0L
           ProxyAccess = Set.empty
           Privileges = Set.singleton UnboundedScope
           Tokens = Map.empty }
