@@ -10,6 +10,7 @@
     <Compile Include="Helpers.fs" />
     <Compile Include="InMemoryTransactionProcessor.fs" />
     <Compile Include="TransactionClient.fs" />
+    <Compile Include="Commands.fs" />
   </ItemGroup>
 
   <ItemGroup>
