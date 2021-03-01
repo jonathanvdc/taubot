@@ -132,8 +132,7 @@ let rec rootTokens (state: AppState) =
     else
         rootAcc.Tokens
 
-let relativeTo (relativeBase: string) (path: string) =
-    Path.Combine(relativeBase, path)
+let relativeTo (relativeBase: string) (path: string) = Path.Combine(relativeBase, path)
 
 let start (configPath: string) (config: AppConfiguration) =
     let databasePath =
