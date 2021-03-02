@@ -38,7 +38,7 @@ type State =
 type AccountCredentials =
     {
       /// The Discord user's ID.
-      Id: uint64
+      Id: string
 
       /// The account's name.
       Account: AccountId
@@ -51,10 +51,12 @@ let tryFindCredentials (state: State) (user: SocketUser) =
     try
         state.DatabaseLock.EnterReadLock()
 
+        let userId = string user.Id
+
         state
             .Database
             .GetCollection<AccountCredentials>()
-            .tryFindOne <@ fun x -> x.Id = user.Id @>
+            .tryFindOne <@ fun x -> x.Id = userId @>
     finally
         state.DatabaseLock.ExitReadLock()
 
@@ -102,7 +104,7 @@ let replyTo (message: SocketMessage) (replyBody: string) =
 let prefixes (state: State) =
     state.Config.Prefixes
     @ [ sprintf "<@%d>" state.DiscordClient.CurrentUser.Id
-        sprintf "<!@%d>" state.DiscordClient.CurrentUser.Id ]
+        sprintf "<@!%d>" state.DiscordClient.CurrentUser.Id ]
 
 /// Reads a message's command, the text that this bot should process.
 /// Returns None if the message includes no command for the bot.
@@ -135,7 +137,7 @@ let openAccount (state: State) (user: SocketUser) =
         | Ok _ ->
             return
                 Ok
-                    { Id = user.Id
+                    { Id = string user.Id
                       Account = accountName
                       AccessToken = tokenId }
         | Error e -> return Error e
@@ -191,60 +193,67 @@ let formatCommandError (command: string) (error: CommandError) =
 /// Handles an incoming message.
 let handleMessage (state: State) (message: SocketMessage) =
     async {
-        // Ignore messages from bots.
-        if message.Author.IsBot then return ()
+        try
+            // Ignore messages from bots.
+            if message.Author.IsBot then return ()
 
-        // Extract the user's command from the message.
-        match tryReadCommand state message with
-        | None ->
-            // Ignore messages that are not addressed to us.
-            return ()
-        | Some command ->
-            match tryFindCredentials state message.Author with
-            | Some credentials ->
-                // Parse the command as a transaction request.
-                match parseAsTransactionRequest credentials.Account credentials.AccessToken command with
-                | Ok request ->
-                    // Perform the transaction.
-                    let! response = state.BankClient.PerformTransactionAsync(request)
-
-                    // Report the result.
-                    match response with
-                    | Ok result ->
-                        return!
-                            result
-                            |> formatTransactionResult request
-                            |> replyTo message
-                    | Error e -> return! e |> formatTransactionError |> replyTo message
-                | Error e -> return! e |> formatCommandError command |> replyTo message
+            // Extract the user's command from the message.
+            match tryReadCommand state message with
             | None ->
-                if command.ToLowerInvariant() = "open" then
-                    // Open a new account for the user.
-                    let! response = openAccount state message.Author
+                // Ignore messages that are not addressed to us.
+                return ()
+            | Some command ->
+                let creds = tryFindCredentials state message.Author
 
-                    match response with
-                    | Ok credentials ->
-                        // Add the credentials to the database.
-                        addCredentials state credentials
+                match creds with
+                | Some credentials ->
+                    // Parse the command as a transaction request.
+                    match parseAsTransactionRequest credentials.Account credentials.AccessToken command with
+                    | Ok request ->
+                        // Perform the transaction.
+                        let! response = state.BankClient.PerformTransactionAsync(request)
 
-                        // Notify the user that we opened an account for them.
-                        return! replyTo message "Account opened successfully!"
-                    | Error AccountAlreadyExistsError ->
-                        return! replyTo message "You already have an account, but it is not registered with this bot."
-                    | Error e ->
+                        // Report the result.
+                        match response with
+                        | Ok result ->
+                            return!
+                                result
+                                |> formatTransactionResult request
+                                |> replyTo message
+                        | Error e -> return! e |> formatTransactionError |> replyTo message
+                    | Error e -> return! e |> formatCommandError command |> replyTo message
+                | None ->
+                    if command.ToLowerInvariant() = "open" then
+                        // Open a new account for the user.
+                        let! response = openAccount state message.Author
+
+                        match response with
+                        | Ok credentials ->
+                            // Add the credentials to the database.
+                            addCredentials state credentials
+
+                            // Notify the user that we opened an account for them.
+                            return! replyTo message "Account opened successfully!"
+                        | Error AccountAlreadyExistsError ->
+                            return!
+                                replyTo message "You already have an account, but it is not registered with this bot."
+                        | Error e ->
+                            return!
+                                replyTo
+                                    message
+                                    (formatTransactionError e
+                                     |> sprintf "error while opening account: %s")
+                    else
+                        // Reply to the message by saying that we don't know them.
                         return!
                             replyTo
                                 message
-                                (formatTransactionError e
-                                 |> sprintf "error while opening account: %s")
-                else
-                    // Reply to the message by saying that we don't know them.
-                    return!
-                        replyTo
-                            message
-                            (sprintf
-                                "Howdy! I don't know you yet. Would you like me to create a new account for you? If so, send me the following message: `%s open`"
-                                (prefixes state |> List.head))
+                                (sprintf
+                                    "Howdy! I don't know you yet. Would you like me to create a new account for you? If so, send me the following message: `%s open`"
+                                    (prefixes state |> List.head))
+        with e ->
+            eprintfn "Exception encountered: %A" e
+            return! replyTo message (sprintf "Whoops. I encountered an internal exception.")
     }
     |> Async.StartAsTask
     :> Task
