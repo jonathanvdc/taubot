@@ -11,6 +11,7 @@ type Command =
     | QueryBalanceCommand of keyword: Token
 
 type CommandError =
+    | UnknownCommand of token: Token
     | UnexpectedToken of token: Token
     | UnexpectedProxy of keyword: Token
     | UnexpectedAdmin of keyword: Token
@@ -41,15 +42,27 @@ let tokenize (command: string) =
 /// Parses a sequence of command tokens.
 let rec parseTokens (tokens: Token list) =
     match tokens with
-    | [ { Text = "bal" } as t ]
-    | [ { Text = "balance" } as t ] -> Ok(QueryBalanceCommand t)
-    | { Text = "admin" } as t :: proxyId :: cmd ->
-        parseTokens cmd
-        |> Result.map (fun inner -> AdminCommand(t, proxyId, inner))
-    | { Text = "proxy" } as t :: proxyId :: cmd ->
-        parseTokens cmd
-        |> Result.map (fun inner -> ProxyCommand(t, proxyId, inner))
-    | t :: _ -> Error(UnexpectedToken t)
+    | keyword :: tail ->
+        match keyword.Text.ToLowerInvariant(), tail with
+        | "bal", []
+        | "balance", [] -> Ok(QueryBalanceCommand keyword)
+
+        | "bal", t :: _
+        | "balance", t :: _ -> Error(UnexpectedToken t)
+
+        | "admin", proxyId :: tail ->
+            parseTokens tail
+            |> Result.map (fun inner -> AdminCommand(keyword, proxyId, inner))
+
+        | "admin", [] -> Error UnfinishedCommand
+
+        | "proxy", proxyId :: tail ->
+            parseTokens tail
+            |> Result.map (fun inner -> ProxyCommand(keyword, proxyId, inner))
+
+        | "proxy", [] -> Error UnfinishedCommand
+
+        | _, _ -> Error(UnknownCommand keyword)
     | [] -> Error UnfinishedCommand
 
 /// Parses a command.
@@ -59,11 +72,11 @@ let parse = tokenize >> parseTokens
 /// and an optional admin proxy ID.
 /// This function translates the author-centric model of a command to the
 /// account-centric model of a reuqest.
-let buildAuthorization (proxyChain: AccountId list) (adminProxyId: AccountId option) (authorName: string) =
+let buildAuthorization (proxyChain: AccountId list) (adminProxyId: AccountId option) (authorAccount: AccountId) =
     let acc, auth =
         match adminProxyId with
-        | Some accName -> accName, AdminAuthorized authorName
-        | None -> authorName, SelfAuthorized
+        | Some accName -> accName, AdminAuthorized authorAccount
+        | None -> authorAccount, SelfAuthorized
 
     let rec applyProxies chain =
         match chain with
@@ -75,7 +88,7 @@ let buildAuthorization (proxyChain: AccountId list) (adminProxyId: AccountId opt
     applyProxies proxyChain
 
 /// Converts a command to a transaction request.
-let toTransactionRequest (authorName: string) (accessTokenId: string) (command: Command) =
+let toTransactionRequest (authorAccount: AccountId) (accessTokenId: AccessTokenId) (command: Command) =
     // First construct the chain of proxies. Proxy commands must come at
     // the start of any command, so we can simply pop off commands until
     // we have a non-proxy command at the head of the command pseudo-list.
@@ -105,7 +118,8 @@ let toTransactionRequest (authorName: string) (accessTokenId: string) (command: 
     // If we managed to parse the action, then we now compose the request
     // itself.
     let composeRequest action =
-        let acc, auth = buildAuthorization proxies adminProxyId authorName
+        let acc, auth =
+            buildAuthorization proxies adminProxyId authorAccount
 
         { Account = acc
           Authorization = auth
@@ -113,3 +127,8 @@ let toTransactionRequest (authorName: string) (accessTokenId: string) (command: 
           Action = action }
 
     Result.map composeRequest parsedAction
+
+/// Parses a command as a transaction request.
+let parseAsTransactionRequest (authorAccount: AccountId) (accessTokenId: AccessTokenId) (command: string) =
+    parse command
+    |> Result.bind (toTransactionRequest authorAccount accessTokenId)

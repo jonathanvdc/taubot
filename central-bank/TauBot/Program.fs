@@ -10,6 +10,9 @@ open Options
 open LiteDB
 open LiteDB.FSharp
 open LiteDB.FSharp.Extensions
+open Accounting
+open Accounting.Helpers
+open Accounting.Commands
 
 /// Tau bot's state.
 type State =
@@ -20,8 +23,17 @@ type State =
       /// A reader/writer lock for the database.
       DatabaseLock: ReaderWriterLockSlim
 
+      /// The discord client.
+      DiscordClient: DiscordSocketClient
+
+      /// The central bank transaction client.
+      BankClient: TransactionClient
+
       /// The bot's configuration.
-      Config: AppConfiguration }
+      Config: AppConfiguration
+
+      /// A random number generator.
+      Rng: Random }
 
 type AccountCredentials =
     {
@@ -29,10 +41,10 @@ type AccountCredentials =
       Id: uint64
 
       /// The account's name.
-      Name: string
+      Account: AccountId
 
       /// The account's access token.
-      AccessToken: string }
+      AccessToken: AccessTokenId }
 
 /// Tries to find account credentials for a user.
 let tryFindCredentials (state: State) (user: SocketUser) =
@@ -45,6 +57,19 @@ let tryFindCredentials (state: State) (user: SocketUser) =
             .tryFindOne <@ fun x -> x.Id = user.Id @>
     finally
         state.DatabaseLock.ExitReadLock()
+
+/// Adds account credentials for a user.
+let addCredentials (state: State) (credentials: AccountCredentials) =
+    try
+        state.DatabaseLock.EnterWriteLock()
+
+        state
+            .Database
+            .GetCollection<AccountCredentials>()
+            .Insert(credentials)
+        |> ignore
+    finally
+        state.DatabaseLock.ExitWriteLock()
 
 /// Replies to a message.
 let replyTo (message: SocketMessage) (replyBody: string) =
@@ -66,8 +91,102 @@ let replyTo (message: SocketMessage) (replyBody: string) =
             )
             .Build()
 
-    message.Channel.SendMessageAsync(embed = responseEmbed, messageReference = message.Reference)
-    |> Async.AwaitTask
+    async {
+        let! _ =
+            message.Channel.SendMessageAsync(embed = responseEmbed, messageReference = message.Reference)
+            |> Async.AwaitTask
+
+        return ()
+    }
+
+let prefixes (state: State) =
+    state.Config.Prefixes
+    @ [ sprintf "<@%d>" state.DiscordClient.CurrentUser.Id
+        sprintf "<!@%d>" state.DiscordClient.CurrentUser.Id ]
+
+/// Reads a message's command, the text that this bot should process.
+/// Returns None if the message includes no command for the bot.
+let tryReadCommand (state: State) (message: SocketMessage) =
+    let content = message.Content.Trim()
+
+    let applicablePrefixes =
+        prefixes state
+        |> List.filter (fun prefix -> content.StartsWith(prefix))
+
+    match applicablePrefixes with
+    | [] -> None
+    | prefix :: _ -> Some(content.Substring(prefix.Length).TrimStart())
+
+/// Opens an account for a user.
+let openAccount (state: State) (user: SocketUser) =
+    let accountName = sprintf "discord/%d" user.Id
+    let tokenId = generateTokenId state.Rng
+
+    async {
+        let! response =
+            state.BankClient.PerformTransactionAsync(
+                { Account = state.Config.BotAccountName
+                  AccessToken = Some state.Config.BotAccountAccessToken
+                  Authorization = SelfAuthorized
+                  Action = OpenAccountAction(accountName, tokenId) }
+            )
+
+        match response with
+        | Ok _ ->
+            return
+                Ok
+                    { Id = user.Id
+                      Account = accountName
+                      AccessToken = tokenId }
+        | Error e -> return Error e
+    }
+
+let formatTransactionError (error: TransactionError) =
+    match error with
+    | AccountAlreadyExistsError -> "Account already exists."
+    | TokenAlreadyExistsError -> "Token already exists."
+    | ActionNotImplementedError -> "Command has not been implemented yet."
+    | DestinationDoesNotExistError -> "The destination account does not exist."
+    | UnauthorizedError -> "You are not authorized to perform that action."
+    | InsufficientFundsError -> "You do not have sufficient funds to perform that action."
+    | InvalidAmountError -> "That is not a valid amount."
+    | NetworkError (code, msg) when String.IsNullOrWhiteSpace(msg) ->
+        sprintf "Received an HTTP %s error." (code.ToString())
+    | NetworkError (code, msg) -> sprintf "Received an HTTP %s error. Response: %s" (code.ToString()) msg
+
+let formatScopes (scopes: AccessScope Set) =
+    scopes
+    |> Set.map string
+    |> List.ofSeq
+    |> List.sort
+    |> String.concat ", "
+
+let formatTransactionResult (request: TransactionRequest) (result: TransactionResult) =
+    match result with
+    | SuccessfulResult id -> sprintf "Transaction performed with ID %d." id
+    | AccessScopesResult scopes ->
+        formatScopes scopes
+        |> match request.Action with
+           | QueryPrivilegesAction -> sprintf "Privileges assigned to %s: %s." request.Account
+           | _ -> sprintf "Access scopes: %s."
+    | AccessTokenResult id ->
+        match request.Action with
+        | CreateTokenAction (_, scopes) ->
+            sprintf "Created access token for %s with ID `%s` and scopes %s." request.Account id (formatScopes scopes)
+        | OpenAccountAction (name, _) -> sprintf "Opened account %s with access token ID `%s`" name id
+        | _ -> sprintf "Access token with ID `%s`" id
+    | BalanceResult value -> sprintf "%s's balance is %d." request.Account value
+    | HistoryResult transactions ->
+        // TODO: format this better.
+        sprintf "Transactions: %A" transactions
+
+let formatCommandError (command: string) (error: CommandError) =
+    match error with
+    | UnknownCommand t -> sprintf "Unknown command %s." t.Text
+    | UnexpectedAdmin t -> sprintf "Misplaced %s command." t.Text
+    | UnexpectedProxy t -> sprintf "Misplaced %s command." t.Text
+    | UnexpectedToken t -> sprintf "Unexpected token: %s." t.Text
+    | UnfinishedCommand -> sprintf "Unfinished or empty command."
 
 /// Handles an incoming message.
 let handleMessage (state: State) (message: SocketMessage) =
@@ -75,14 +194,57 @@ let handleMessage (state: State) (message: SocketMessage) =
         // Ignore messages from bots.
         if message.Author.IsBot then return ()
 
-        match tryFindCredentials state message.Author with
-        | Some credentials ->
-            let! _ = replyTo message "I know you!"
-            return ()
+        // Extract the user's command from the message.
+        match tryReadCommand state message with
         | None ->
-            // Reply to the message by saying that we don't know them.
-            let! _ = replyTo message "Howdy! I don't know you yet. Would you like me to create a new account for you?"
+            // Ignore messages that are not addressed to us.
             return ()
+        | Some command ->
+            match tryFindCredentials state message.Author with
+            | Some credentials ->
+                // Parse the command as a transaction request.
+                match parseAsTransactionRequest credentials.Account credentials.AccessToken command with
+                | Ok request ->
+                    // Perform the transaction.
+                    let! response = state.BankClient.PerformTransactionAsync(request)
+
+                    // Report the result.
+                    match response with
+                    | Ok result ->
+                        return!
+                            result
+                            |> formatTransactionResult request
+                            |> replyTo message
+                    | Error e -> return! e |> formatTransactionError |> replyTo message
+                | Error e -> return! e |> formatCommandError command |> replyTo message
+            | None ->
+                if command.ToLowerInvariant() = "open" then
+                    // Open a new account for the user.
+                    let! response = openAccount state message.Author
+
+                    match response with
+                    | Ok credentials ->
+                        // Add the credentials to the database.
+                        addCredentials state credentials
+
+                        // Notify the user that we opened an account for them.
+                        return! replyTo message "Account opened successfully!"
+                    | Error AccountAlreadyExistsError ->
+                        return! replyTo message "You already have an account, but it is not registered with this bot."
+                    | Error e ->
+                        return!
+                            replyTo
+                                message
+                                (formatTransactionError e
+                                 |> sprintf "error while opening account: %s")
+                else
+                    // Reply to the message by saying that we don't know them.
+                    return!
+                        replyTo
+                            message
+                            (sprintf
+                                "Howdy! I don't know you yet. Would you like me to create a new account for you? If so, send me the following message: `%s open`"
+                                (prefixes state |> List.head))
     }
     |> Async.StartAsTask
     :> Task
@@ -120,13 +282,19 @@ let main argv =
             // Create a Discord client.
             use client = new DiscordSocketClient()
 
+            // Create a central bank client.
+            use bankClient = new TransactionClient(config.BankUrl)
+
             // Register a handler for messages.
             client.add_MessageReceived (
                 Func<SocketMessage, Task>(
                     handleMessage
                         { Database = database
                           DatabaseLock = databaseLock
-                          Config = config }
+                          DiscordClient = client
+                          BankClient = bankClient
+                          Config = config
+                          Rng = Random() }
                 )
             )
 

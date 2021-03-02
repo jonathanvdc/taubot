@@ -23,6 +23,8 @@ type AppConfiguration =
     { [<JsonProperty(Required = Required.Always)>]
       DatabasePath: string
       [<JsonProperty(Required = Required.Always)>]
+      BankUrl: string
+      [<JsonProperty(Required = Required.Always)>]
       DiscordToken: string
       [<JsonProperty(Required = Required.Always)>]
       BotAccountName: string
