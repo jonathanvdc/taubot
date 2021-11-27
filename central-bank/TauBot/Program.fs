@@ -185,6 +185,8 @@ let formatTransactionResult (request: TransactionRequest) (result: TransactionRe
 let formatCommandError (command: string) (error: CommandError) =
     match error with
     | UnknownCommand t -> sprintf "Unknown command %s." t.Text
+    | NotANumber t -> sprintf "Expected a number, found %s." t.Text
+    | ExpectedPositiveNumber t -> sprintf "Expected a positive number, found %s." t.Text
     | UnexpectedAdmin t -> sprintf "Misplaced %s command." t.Text
     | UnexpectedProxy t -> sprintf "Misplaced %s command." t.Text
     | UnexpectedToken t -> sprintf "Unexpected token: %s." t.Text

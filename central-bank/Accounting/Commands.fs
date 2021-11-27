@@ -1,7 +1,12 @@
 module Accounting.Commands
 
+/// A text token in a command AST.
 type Token = { StartIndex: int; Text: string }
 
+/// A currency amount token in a command AST.
+type CurrencyAmountToken = { StartIndex: int; Text: string; Amount: CurrencyAmount }
+
+/// An AST of a command as expressed by a user.
 type Command =
     /// A command that performs another command as an admin.
     | AdminCommand of keyword: Token * proxiedAccount: Token * inner: Command
@@ -9,13 +14,30 @@ type Command =
     | ProxyCommand of keyword: Token * proxiedAccount: Token * inner: Command
     /// A command that requests the balance of the user's account.
     | QueryBalanceCommand of keyword: Token
+    /// A command that mints currency.
+    | MintCommand of keyword: Token * amount: CurrencyAmountToken
+    /// A command that transfers currency.
+    | TransferCommand of keyword: Token * amount: CurrencyAmountToken * destionation: Token
 
+/// An error encountered during command parsing.
 type CommandError =
     | UnknownCommand of token: Token
     | UnexpectedToken of token: Token
+    | NotANumber of token: Token
+    | ExpectedPositiveNumber of token: CurrencyAmountToken
     | UnexpectedProxy of keyword: Token
     | UnexpectedAdmin of keyword: Token
     | UnfinishedCommand
+
+// Helpers for currency amount tokens.
+module CurrencyAmountToken =
+    let parse (token: Token): Result<CurrencyAmountToken, CommandError> =
+        match CurrencyAmount.TryParse token.Text with
+        | (true, x) -> Ok { StartIndex = token.StartIndex; Text = token.Text; Amount = x }
+        | (false, _) -> Error (NotANumber token)
+
+    let assertPositive (token: CurrencyAmountToken): Result<CurrencyAmountToken, CommandError> =
+        if token.Amount < 0 then Error (ExpectedPositiveNumber token) else Ok token
 
 /// Tokenizes a command.
 let tokenize (command: string) =
@@ -39,16 +61,41 @@ let tokenize (command: string) =
 
     tokenizePart command 0 [] |> List.rev
 
+/// Takes a token and returns the keyword it represents, if any.
+/// This function converts keywords to lower-case and expands
+/// abbreviations.
+let extractKeyword (keyword: Token) =
+    match keyword.Text.ToLowerInvariant() with
+    | "bal" -> "balance"
+    | other -> other
+
 /// Parses a sequence of command tokens.
 let rec parseTokens (tokens: Token list) =
     match tokens with
     | keyword :: tail ->
-        match keyword.Text.ToLowerInvariant(), tail with
-        | "bal", []
+        match extractKeyword keyword, tail with
+        // Balance followed by nothing is the pattern we expect.
         | "balance", [] -> Ok(QueryBalanceCommand keyword)
 
-        | "bal", t :: _
+        // Balance followed by an additional token is gibberish.
         | "balance", t :: _ -> Error(UnexpectedToken t)
+
+        // Mint takes exactly one argument.
+        | "mint", [t] -> CurrencyAmountToken.parse t |> Result.map (fun t -> MintCommand(keyword, t))
+
+        // Mint with no arguments or more than one argument is wrong.
+        | "mint", [] -> Error UnfinishedCommand
+        | "mint", _ :: t :: _ -> Error(UnexpectedToken t)
+
+        // Transfer takes exactly two arguments.
+        | "transfer", [destination; amount] ->
+            CurrencyAmountToken.parse amount
+            |> Result.bind CurrencyAmountToken.assertPositive
+            |> Result.map (fun t -> TransferCommand(keyword, t, destination))
+
+        // Catch invalid versions of transfer.
+        | "transfer", [] | "transfer", [_] -> Error UnfinishedCommand
+        | "transfer", _ :: _ :: t :: _ -> Error(UnexpectedToken t)
 
         | "admin", proxyId :: tail ->
             parseTokens tail
@@ -112,6 +159,8 @@ let toTransactionRequest (authorAccount: AccountId) (accessTokenId: AccessTokenI
     let parsedAction =
         match command with
         | QueryBalanceCommand _ -> Ok QueryBalanceAction
+        | MintCommand (_, amount) -> Ok (MintAction amount.Amount)
+        | TransferCommand (_, amount, destination) -> Ok (TransferAction(amount.Amount, destination.Text))
         | AdminCommand (keyword, _, _) -> Error(UnexpectedAdmin keyword)
         | ProxyCommand (keyword, _, _) -> Error(UnexpectedProxy keyword)
 
