@@ -16,3 +16,18 @@ type TransactionRequest =
 
       /// The action being performed.
       Action: AccountAction }
+
+module TransactionRequest =
+    open System
+    open System.Threading
+
+    /// Turns a transaction request into a transaction by appending a unique identifier and
+    /// a timestamp to the request. Unique identifiers are generated atomically using a counter
+    /// variable. The timestamp corresponds to the current time (UTC).
+    let toTransaction (counter: byref<TransactionId>) (request: TransactionRequest): Transaction =
+      { Id = Interlocked.Increment(&counter)
+        PerformedAt = DateTime.UtcNow
+        Account = request.Account
+        Authorization = request.Authorization
+        AccessToken = request.AccessToken
+        Action = request.Action }

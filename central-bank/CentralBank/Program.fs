@@ -32,12 +32,7 @@ type AppState =
 let applyTransaction = HistoryDatabaseProcessor.apply
 
 let wrapTransactionRequest (request: TransactionRequest) (state: AppState) =
-    { Id = Interlocked.Increment(&state.IdCounter)
-      PerformedAt = DateTime.UtcNow
-      Account = request.Account
-      Authorization = request.Authorization
-      AccessToken = request.AccessToken
-      Action = request.Action }
+    TransactionRequest.toTransaction &state.IdCounter request
 
 /// Processes a trusted transaction.
 let processTrustedTransaction (request: TransactionRequest) (state: AppState) =
