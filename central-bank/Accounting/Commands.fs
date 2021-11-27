@@ -23,7 +23,7 @@ type Command =
 type CommandError =
     | UnknownCommand of token: Token
     | UnexpectedToken of token: Token
-    | NotANumber of token: Token
+    | ExpectedNumber of token: Token
     | ExpectedPositiveNumber of token: CurrencyAmountToken
     | UnexpectedProxy of keyword: Token
     | UnexpectedAdmin of keyword: Token
@@ -34,7 +34,7 @@ module CurrencyAmountToken =
     let parse (token: Token): Result<CurrencyAmountToken, CommandError> =
         match CurrencyAmount.TryParse token.Text with
         | (true, x) -> Ok { StartIndex = token.StartIndex; Text = token.Text; Amount = x }
-        | (false, _) -> Error (NotANumber token)
+        | (false, _) -> Error (ExpectedNumber token)
 
     let assertPositive (token: CurrencyAmountToken): Result<CurrencyAmountToken, CommandError> =
         if token.Amount < 0 then Error (ExpectedPositiveNumber token) else Ok token
