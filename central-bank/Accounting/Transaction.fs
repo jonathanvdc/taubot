@@ -140,10 +140,10 @@ type TransactionError =
     | InsufficientFundsError
 
     /// Indicates that the destination account does not exist.
-    | DestinationDoesNotExistError
+    | DestinationDoesNotExistError of destination: AccountId
 
     /// Indicates that a transaction specified an invalid amount.
-    | InvalidAmountError
+    | InvalidAmountError of amount: CurrencyAmount
 
     /// A response to an account creation request, indicating that
     /// the account already exists.

@@ -63,8 +63,8 @@ let isQuery action =
 
 let validateAction action =
     match action with
-    | MintAction amount when amount <= 0L -> Error InvalidAmountError
-    | TransferAction (amount, _) when amount <= 0L -> Error InvalidAmountError
+    | MintAction amount when amount <= 0L -> Error(InvalidAmountError amount)
+    | TransferAction (amount, _) when amount <= 0L -> Error(InvalidAmountError amount)
     | _ -> Ok()
 
 /// Randomly generates a new token ID.

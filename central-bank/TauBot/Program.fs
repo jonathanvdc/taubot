@@ -148,10 +148,10 @@ let formatTransactionError (error: TransactionError) =
     | AccountAlreadyExistsError -> "Account already exists."
     | TokenAlreadyExistsError -> "Token already exists."
     | ActionNotImplementedError -> "Command has not been implemented yet."
-    | DestinationDoesNotExistError -> "The destination account does not exist."
+    | DestinationDoesNotExistError dest -> sprintf "Recipient %s does not exist." dest
     | UnauthorizedError -> "You are not authorized to perform that action."
     | InsufficientFundsError -> "You do not have sufficient funds to perform that action."
-    | InvalidAmountError -> "That is not a valid amount."
+    | InvalidAmountError amount -> sprintf "%d is not a valid amount for this action." amount
     | NetworkError (code, msg) when String.IsNullOrWhiteSpace(msg) ->
         sprintf "Received an HTTP %s error." (code.ToString())
     | NetworkError (code, msg) -> sprintf "Received an HTTP %s error. Response: %s" (code.ToString()) msg
@@ -192,12 +192,12 @@ let formatCommandError (command: string) (error: CommandError) =
     | UnexpectedToken t -> sprintf "Unexpected token: %s." t.Text
     | UnfinishedCommand -> sprintf "Unfinished or empty command."
 
-let discordMentionRegex = Text.RegularExpressions.Regex(@"\<@?(\d+)\>", Text.RegularExpressions.RegexOptions.Compiled)
+let discordMentionRegex = Text.RegularExpressions.Regex(@"\<@\!?(\d+)\>", Text.RegularExpressions.RegexOptions.Compiled)
 
 /// Expands all Discord mentions in a command by replacing them with (theoretical)
 /// account names.
 let expandDiscordMentions (command: string) =
-    discordMentionRegex.Replace(command, fun x -> sprintf "discord/%s" x.Groups[0].Value)
+    discordMentionRegex.Replace(command, fun x -> sprintf "discord/%s" x.Groups[1].Value)
 
 /// Handles an incoming message.
 let handleMessage (state: State) (message: SocketMessage) =

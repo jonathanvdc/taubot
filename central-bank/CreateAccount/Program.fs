@@ -18,7 +18,7 @@ type Options =
 
       [<Option("make-broker",
                Default = false,
-               HelpText = "Specifies if the newly created account should be authorized as a broker.",
+               HelpText = "Specifies if the newly created account should be authorized to open accounts.",
                Required = false)>]
       MakeBroker: bool }
 

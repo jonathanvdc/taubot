@@ -116,7 +116,7 @@ let apply (transaction: Transaction) (state: State): Result<State * TransactionR
                               Privileges = Set.union destAcc.Privileges privileges }
 
                 Ok(newState, SuccessfulResult transaction.Id)
-            | None -> Error DestinationDoesNotExistError
+            | None -> Error(DestinationDoesNotExistError accId)
 
         | RemovePrivilegesAction (accId, privileges) ->
             match getAccount accId state with
@@ -129,7 +129,7 @@ let apply (transaction: Transaction) (state: State): Result<State * TransactionR
                               Privileges = Set.difference destAcc.Privileges privileges }
 
                 Ok(newState, SuccessfulResult transaction.Id)
-            | None -> Error DestinationDoesNotExistError
+            | None -> Error(DestinationDoesNotExistError accId)
 
         | OpenAccountAction (newId, tokenId) ->
             if accountExists newId state then
@@ -195,4 +195,4 @@ let apply (transaction: Transaction) (state: State): Result<State * TransactionR
                         |> setAccount srcId { srcAcc with Balance = newBalance }
 
                     Ok(newState, SuccessfulResult transaction.Id)
-            | None -> Error DestinationDoesNotExistError
+            | None -> Error(DestinationDoesNotExistError destId)
