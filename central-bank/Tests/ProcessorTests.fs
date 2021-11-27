@@ -11,7 +11,7 @@ type ProcessorTests() =
         emptyState
         |> setAccount
             "@prime-mover"
-            { Balance = 0m
+            { Balance = 0
               ProxyAccess = Set.empty
               Privileges = Set.ofList [ UnboundedScope ]
               Tokens = Map.empty }
@@ -55,7 +55,7 @@ type ProcessorTests() =
     member this.TestQueryInitialBalance() =
         this.InitialState
         |> this.QueryPrimeMover(QueryBalanceAction)
-        |> (=) (BalanceResult 0m)
+        |> (=) (BalanceResult 0)
         |> Assert.IsTrue
 
     [<TestMethod>]
@@ -63,23 +63,23 @@ type ProcessorTests() =
         this.InitialState
         |> this.ApplyPrimeMover(OpenAccountAction "user")
         |> this.ApplyQuery(this.CreateAdminTransaction QueryBalanceAction "user")
-        |> (=) (BalanceResult 0m)
+        |> (=) (BalanceResult 0)
         |> Assert.IsTrue
 
     [<TestMethod>]
     member this.TestMint() =
         this.InitialState
-        |> this.ApplyPrimeMover(MintAction 10m)
+        |> this.ApplyPrimeMover(MintAction 10)
         |> this.ApplyQuery(this.CreatePrimeMoverTransaction QueryBalanceAction)
-        |> (=) (BalanceResult 10m)
+        |> (=) (BalanceResult 10)
         |> Assert.IsTrue
 
     [<TestMethod>]
     member this.TestOpenMintAndTransfer() =
         this.InitialState
         |> this.ApplyPrimeMover(OpenAccountAction "user")
-        |> this.ApplyPrimeMover(MintAction 10m)
-        |> this.ApplyPrimeMover(TransferAction(10m, "user"))
+        |> this.ApplyPrimeMover(MintAction 10)
+        |> this.ApplyPrimeMover(TransferAction(10, "user"))
         |> this.ApplyQuery(this.CreateAdminTransaction QueryBalanceAction "user")
-        |> (=) (BalanceResult 10m)
+        |> (=) (BalanceResult 10)
         |> Assert.IsTrue

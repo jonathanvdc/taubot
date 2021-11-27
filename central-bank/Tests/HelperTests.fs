@@ -11,8 +11,8 @@ type HelperTests() =
     member this.LowLevelAccess() =
         // Compose a list of actions and the scopes they require.
         let elements =
-            [ (MintAction 10m, MintScope)
-              (TransferAction(10m, "@government"), TransferScope)
+            [ (MintAction 10, MintScope)
+              (TransferAction(10, "@government"), TransferScope)
               (QueryBalanceAction, QueryBalanceScope) ]
 
         let scopes = List.map snd elements |> Set.ofList
