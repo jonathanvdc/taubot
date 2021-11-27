@@ -1,23 +1,18 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
   </PropertyGroup>
-
   <ItemGroup>
     <Compile Include="Options.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\Accounting\Accounting.fsproj" />
   </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="CommandLineParser.FSharp" Version="2.8.0" />
     <PackageReference Include="Discord.Net" Version="2.3.0" />
     <PackageReference Include="LiteDB.FSharp" Version="2.15.1" />
   </ItemGroup>
-
 </Project>
