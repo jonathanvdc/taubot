@@ -6,6 +6,7 @@ open Accounting.Helpers
 
 [<TestClass>]
 type HelperTests() =
+    static let mutable counter = 0UL
 
     [<TestMethod>]
     member this.LowLevelAccess() =
@@ -33,68 +34,84 @@ type HelperTests() =
 
     [<TestMethod>]
     member this.ProxyChainConstruction() =
-        { Account = "@government"
-          Action = QueryBalanceAction
-          Authorization = SelfAuthorized
-          AccessToken = None }
+        TransactionRequest.toTransaction
+            &counter
+            { Account = "@government"
+              Action = QueryBalanceAction
+              Authorization = SelfAuthorized
+              AccessToken = None }
         |> proxyChain
         |> (=) [ "@government" ]
         |> Assert.IsTrue
 
-        { Account = "@government"
-          Action = QueryBalanceAction
-          Authorization = AdminAuthorized "admin"
-          AccessToken = None }
+        TransactionRequest.toTransaction
+            &counter
+            { Account = "@government"
+              Action = QueryBalanceAction
+              Authorization = AdminAuthorized "admin"
+              AccessToken = None }
         |> proxyChain
         |> (=) [ "admin" ]
         |> Assert.IsTrue
 
-        { Account = "@government"
-          Action = QueryBalanceAction
-          Authorization = ProxyAuthorized("admin", SelfAuthorized)
-          AccessToken = None }
+        TransactionRequest.toTransaction
+            &counter
+            { Account = "@government"
+              Action = QueryBalanceAction
+              Authorization = ProxyAuthorized("admin", SelfAuthorized)
+              AccessToken = None }
         |> proxyChain
         |> (=) [ "admin"; "@government" ]
         |> Assert.IsTrue
 
-        { Account = "@government"
-          Action = QueryBalanceAction
-          Authorization = ProxyAuthorized("foo", ProxyAuthorized("admin", SelfAuthorized))
-          AccessToken = None }
+        TransactionRequest.toTransaction
+            &counter
+            { Account = "@government"
+              Action = QueryBalanceAction
+              Authorization = ProxyAuthorized("foo", ProxyAuthorized("admin", SelfAuthorized))
+              AccessToken = None }
         |> proxyChain
         |> (=) [ "foo"; "admin"; "@government" ]
         |> Assert.IsTrue
 
     [<TestMethod>]
     member this.FinalAuthorizerConstruction() =
-        { Account = "@government"
-          Action = QueryBalanceAction
-          Authorization = SelfAuthorized
-          AccessToken = None }
+        TransactionRequest.toTransaction
+            &counter
+            { Account = "@government"
+              Action = QueryBalanceAction
+              Authorization = SelfAuthorized
+              AccessToken = None }
         |> finalAuthorizer
         |> (=) "@government"
         |> Assert.IsTrue
 
-        { Account = "@government"
-          Action = QueryBalanceAction
-          Authorization = AdminAuthorized "admin"
-          AccessToken = None }
+        TransactionRequest.toTransaction
+            &counter
+            { Account = "@government"
+              Action = QueryBalanceAction
+              Authorization = AdminAuthorized "admin"
+              AccessToken = None }
         |> finalAuthorizer
         |> (=) "admin"
         |> Assert.IsTrue
 
-        { Account = "@government"
-          Action = QueryBalanceAction
-          Authorization = ProxyAuthorized("admin", SelfAuthorized)
-          AccessToken = None }
+        TransactionRequest.toTransaction
+            &counter
+            { Account = "@government"
+              Action = QueryBalanceAction
+              Authorization = ProxyAuthorized("admin", SelfAuthorized)
+              AccessToken = None }
         |> finalAuthorizer
         |> (=) "@government"
         |> Assert.IsTrue
 
-        { Account = "@government"
-          Action = QueryBalanceAction
-          Authorization = ProxyAuthorized("foo", ProxyAuthorized("admin", SelfAuthorized))
-          AccessToken = None }
+        TransactionRequest.toTransaction
+            &counter
+            { Account = "@government"
+              Action = QueryBalanceAction
+              Authorization = ProxyAuthorized("foo", ProxyAuthorized("admin", SelfAuthorized))
+              AccessToken = None }
         |> finalAuthorizer
         |> (=) "@government"
         |> Assert.IsTrue

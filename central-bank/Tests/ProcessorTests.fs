@@ -6,6 +6,7 @@ open Accounting.InMemoryTransactionProcessor
 
 [<TestClass>]
 type ProcessorTests() =
+    static let mutable counter = 0UL
 
     member this.InitialState =
         emptyState
@@ -17,16 +18,20 @@ type ProcessorTests() =
               Tokens = Map.empty }
 
     member this.CreatePrimeMoverTransaction action =
-        { Account = "@prime-mover"
-          Action = action
-          Authorization = SelfAuthorized
-          AccessToken = None }
+        TransactionRequest.toTransaction
+            &counter
+            { Account = "@prime-mover"
+              Action = action
+              Authorization = SelfAuthorized
+              AccessToken = None }
 
     member this.CreateAdminTransaction action accountId =
-        { Account = accountId
-          Action = action
-          Authorization = AdminAuthorized "@prime-mover"
-          AccessToken = None }
+        TransactionRequest.toTransaction
+            &counter
+            { Account = accountId
+              Action = action
+              Authorization = AdminAuthorized "@prime-mover"
+              AccessToken = None }
 
     member this.ExpectSuccess result =
         match result with
@@ -61,7 +66,7 @@ type ProcessorTests() =
     [<TestMethod>]
     member this.TestOpenAccount() =
         this.InitialState
-        |> this.ApplyPrimeMover(OpenAccountAction "user")
+        |> this.ApplyPrimeMover(OpenAccountAction("user", "user-access-token"))
         |> this.ApplyQuery(this.CreateAdminTransaction QueryBalanceAction "user")
         |> (=) (BalanceResult 0)
         |> Assert.IsTrue
@@ -77,7 +82,7 @@ type ProcessorTests() =
     [<TestMethod>]
     member this.TestOpenMintAndTransfer() =
         this.InitialState
-        |> this.ApplyPrimeMover(OpenAccountAction "user")
+        |> this.ApplyPrimeMover(OpenAccountAction("user", "user-access-token"))
         |> this.ApplyPrimeMover(MintAction 10)
         |> this.ApplyPrimeMover(TransferAction(10, "user"))
         |> this.ApplyQuery(this.CreateAdminTransaction QueryBalanceAction "user")
