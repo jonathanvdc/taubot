@@ -192,6 +192,13 @@ let formatCommandError (command: string) (error: CommandError) =
     | UnexpectedToken t -> sprintf "Unexpected token: %s." t.Text
     | UnfinishedCommand -> sprintf "Unfinished or empty command."
 
+let discordMentionRegex = Text.RegularExpressions.Regex(@"\<@?(\d+)\>", Text.RegularExpressions.RegexOptions.Compiled)
+
+/// Expands all Discord mentions in a command by replacing them with (theoretical)
+/// account names.
+let expandDiscordMentions (command: string) =
+    discordMentionRegex.Replace(command, fun x -> sprintf "discord/%s" x.Groups[0].Value)
+
 /// Handles an incoming message.
 let handleMessage (state: State) (message: SocketMessage) =
     async {
@@ -206,6 +213,7 @@ let handleMessage (state: State) (message: SocketMessage) =
                 return ()
             | Some command ->
                 let creds = tryFindCredentials state message.Author
+                let command = expandDiscordMentions command
 
                 match creds with
                 | Some credentials ->
