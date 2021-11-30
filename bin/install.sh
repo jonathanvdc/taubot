@@ -10,6 +10,9 @@ fi
 echo "Detecting OS"
 if [[ -f /etc/os-release ]]; then
     . /etc/os-release;
+else
+    echo "Couldn't get OS info"
+    exit 1
 fi
 
 
