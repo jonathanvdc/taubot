@@ -29,6 +29,16 @@ type CommandError =
     | UnexpectedAdmin of keyword: Token
     | UnfinishedCommand
 
+    override this.ToString() =
+        match this with
+        | UnknownCommand t -> sprintf "Unknown command %s." t.Text
+        | ExpectedNumber t -> sprintf "Expected a number, found %s." t.Text
+        | ExpectedPositiveNumber t -> sprintf "Expected a positive number, found %s." t.Text
+        | UnexpectedAdmin t -> sprintf "Misplaced %s command." t.Text
+        | UnexpectedProxy t -> sprintf "Misplaced %s command." t.Text
+        | UnexpectedToken t -> sprintf "Unexpected token: %s." t.Text
+        | UnfinishedCommand -> sprintf "Unfinished or empty command."
+
 // Helpers for currency amount tokens.
 module CurrencyAmountToken =
     let parse (token: Token): Result<CurrencyAmountToken, CommandError> =

@@ -159,6 +159,19 @@ type TransactionError =
     /// Indicates that a network error occurred.
     | NetworkError of statusCode: Net.HttpStatusCode * responseBody: string
 
+    override this.ToString() =
+        match this with
+        | AccountAlreadyExistsError -> "Account already exists."
+        | TokenAlreadyExistsError -> "Token already exists."
+        | ActionNotImplementedError -> "Command has not been implemented yet."
+        | DestinationDoesNotExistError dest -> sprintf "Recipient %s does not exist." dest
+        | UnauthorizedError -> "You are not authorized to perform that action."
+        | InsufficientFundsError -> "You do not have sufficient funds to perform that action."
+        | InvalidAmountError amount -> sprintf "%d is not a valid amount for this action." amount
+        | NetworkError (code, msg) when String.IsNullOrWhiteSpace(msg) ->
+            sprintf "Received an HTTP %s error." (code.ToString())
+        | NetworkError (code, msg) -> sprintf "Received an HTTP %s error. Response: %s" (code.ToString()) msg
+
 /// Applies a transaction. If the transaction can be applied,
 /// a result is returned; otherwise, an error is returned.
 type TransactionProcessor<'state> = Transaction -> 'state -> Result<'state * TransactionResult, TransactionError>

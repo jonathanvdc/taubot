@@ -18,18 +18,9 @@ type State =
       AccessToken: AccessTokenId }
 
 
-let formatTransactionError (error: TransactionError) =
-    match error with
-    | AccountAlreadyExistsError -> "Account already exists."
-    | TokenAlreadyExistsError -> "Token already exists."
-    | ActionNotImplementedError -> "Command has not been implemented yet."
-    | DestinationDoesNotExistError dest -> sprintf "Recipient %s does not exist." dest
-    | UnauthorizedError -> "You are not authorized to perform that action."
-    | InsufficientFundsError -> "You do not have sufficient funds to perform that action."
-    | InvalidAmountError amount -> sprintf "%d is not a valid amount for this action." amount
-    | NetworkError (code, msg) when String.IsNullOrWhiteSpace(msg) ->
-        sprintf "Received an HTTP %s error." (code.ToString())
-    | NetworkError (code, msg) -> sprintf "Received an HTTP %s error. Response: %s" (code.ToString()) msg
+let formatTransactionError (error: TransactionError) = error.ToString()
+
+let formatCommandError (error: CommandError) = error.ToString()
 
 let formatScopes (scopes: AccessScope Set) =
     scopes
@@ -57,16 +48,6 @@ let formatTransactionResult (request: TransactionRequest) (result: TransactionRe
         // TODO: format this better.
         sprintf "Transactions: %A" transactions
 
-let formatCommandError (command: string) (error: CommandError) =
-    match error with
-    | UnknownCommand t -> sprintf "Unknown command %s." t.Text
-    | ExpectedNumber t -> sprintf "Expected a number, found %s." t.Text
-    | ExpectedPositiveNumber t -> sprintf "Expected a positive number, found %s." t.Text
-    | UnexpectedAdmin t -> sprintf "Misplaced %s command." t.Text
-    | UnexpectedProxy t -> sprintf "Misplaced %s command." t.Text
-    | UnexpectedToken t -> sprintf "Unexpected token: %s." t.Text
-    | UnfinishedCommand -> sprintf "Unfinished or empty command."
-
 let replyTo (query: string) (response: string) = async { printf "%s" response }
 
 /// Handles an incoming message.
@@ -87,7 +68,7 @@ let handleMessage (state: State) (message: string) =
                         |> formatTransactionResult request
                         |> replyTo message
                 | Error e -> return! e |> formatTransactionError |> replyTo message
-            | Error e -> return! e |> formatCommandError message |> replyTo message
+            | Error e -> return! e |> formatCommandError |> replyTo message
         with
         | e ->
             eprintfn "Exception encountered: %A" e
