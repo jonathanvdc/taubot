@@ -147,31 +147,8 @@ let formatTransactionError (error: TransactionError) = error.ToString()
 
 let formatCommandError (error: CommandError) = error.ToString()
 
-let formatScopes (scopes: AccessScope Set) =
-    scopes
-    |> Set.map string
-    |> List.ofSeq
-    |> List.sort
-    |> String.concat ", "
-
 let formatTransactionResult (request: TransactionRequest) (result: TransactionResult) =
-    match result with
-    | SuccessfulResult id -> sprintf "Transaction performed with ID %d." id
-    | AccessScopesResult scopes ->
-        formatScopes scopes
-        |> match request.Action with
-           | QueryPrivilegesAction -> sprintf "Privileges assigned to %s: %s." request.Account
-           | _ -> sprintf "Access scopes: %s."
-    | AccessTokenResult id ->
-        match request.Action with
-        | CreateTokenAction (_, scopes) ->
-            sprintf "Created access token for %s with ID `%s` and scopes %s." request.Account id (formatScopes scopes)
-        | OpenAccountAction (name, _) -> sprintf "Opened account %s with access token ID `%s`" name id
-        | _ -> sprintf "Access token with ID `%s`" id
-    | BalanceResult value -> sprintf "%s's balance is %d." request.Account value
-    | HistoryResult transactions ->
-        // TODO: format this better.
-        sprintf "Transactions: %A" transactions
+    TransactionRequest.formatResult request result
 
 let discordMentionRegex = Text.RegularExpressions.Regex(@"\<@\!?(\d+)\>", Text.RegularExpressions.RegexOptions.Compiled)
 
